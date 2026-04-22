@@ -1,0 +1,67 @@
+{
+  "sections": [
+    {
+      "title": "Foundations",
+      "notebooks": [
+        "01-cloud-computing-and-azure-overview",
+        "02-azure-global-infrastructure",
+        "03-azure-active-directory-and-entra-id",
+        "04-rbac-and-azure-policy"
+      ]
+    },
+    {
+      "title": "Compute",
+      "notebooks": [
+        "05-azure-virtual-machines",
+        "06-vm-scale-sets-and-availability",
+        "07-azure-app-service-and-functions",
+        "08-containers-aci-aks-acr"
+      ]
+    },
+    {
+      "title": "Storage",
+      "notebooks": [
+        "09-azure-blob-storage",
+        "10-azure-files-disks-and-storage-tiers"
+      ]
+    },
+    {
+      "title": "Networking",
+      "notebooks": [
+        "11-virtual-networks-and-subnets",
+        "12-vnet-peering-vpn-and-expressroute",
+        "13-azure-load-balancer-and-application-gateway",
+        "14-azure-dns-and-traffic-manager"
+      ]
+    },
+    {
+      "title": "Databases",
+      "notebooks": [
+        "15-azure-sql-and-cosmos-db",
+        "16-azure-cache-for-redis-and-other-databases"
+      ]
+    },
+    {
+      "title": "Application Integration",
+      "notebooks": [
+        "17-azure-service-bus-event-grid-and-event-hubs"
+      ]
+    },
+    {
+      "title": "Monitoring & Security",
+      "notebooks": [
+        "18-azure-monitor-log-analytics-and-alerts",
+        "19-key-vault-and-managed-identities",
+        "20-microsoft-defender-and-security-center"
+      ]
+    },
+    {
+      "title": "DevOps & Governance",
+      "notebooks": [
+        "21-azure-devops-and-ci-cd-pipelines",
+        "22-cost-management-and-azure-pricing",
+        "23-azure-well-architected-framework"
+      ]
+    }
+  ]
+}
