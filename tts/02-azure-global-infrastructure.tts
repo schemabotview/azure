@@ -1,0 +1,55 @@
+Azure operates one of the largest cloud infrastructures in the world, spanning over sixty regions across every major continent. It is architected for high availability, fault tolerance, and compliance — with multiple layers of physical separation that protect your workloads from hardware failures, natural disasters, and regulatory boundary violations.
+
+Let us walk through each layer of this infrastructure, starting from the largest unit and working down to the smallest.
+
+At the very top level, Azure organises its infrastructure into Geographies.
+
+A Geography is a large area — typically a country or group of countries — that shares the same data residency and compliance requirements. For example, the United States Geography contains regions like East US, West US, and Central US. The Europe Geography contains North Europe in Ireland, West Europe in the Netherlands, UK South, and others. Each Geography contains at least two regions, so customers can meet data residency requirements while also enabling disaster recovery. Think of Geographies as compliance and sovereignty boundaries — your data stays within the Geography unless you explicitly choose to move it.
+
+Within each Geography, you have Regions.
+
+A Region is a set of data centres deployed within a defined geographic area, all connected by a dedicated low-latency network. Azure has over sixty regions worldwide — more than any other cloud provider — across North America, South America, Europe, Africa, the Middle East, Asia Pacific, and Australia. Example regions include East US in Virginia, West Europe in the Netherlands, Southeast Asia in Singapore, and Australia East in New South Wales.
+
+When choosing a region for your workload, consider four factors. First, compliance and data residency — regulations may require your data to stay within a specific country. Second, latency — deploy close to your end users for the best experience. Third, service availability — not every Azure service is available in every region, so always check before designing your architecture. Fourth, pricing — costs vary slightly between regions. And fifth — unique to Azure — consider the region's pair, which we will discuss shortly.
+
+Now, within each region, Azure divides infrastructure further into Availability Zones.
+
+An Availability Zone is a physically separate location within a region, with its own independent power, cooling, and networking. Zones within a region are connected by high-speed private fibre with less than two milliseconds of round-trip latency. Regions that support Availability Zones have a minimum of three zones, numbered Zone 1, Zone 2, and Zone 3.
+
+Azure services come in two flavours when it comes to zones. Zonal services let you pin a resource to a specific zone — for example, placing a virtual machine in Zone 1. Zone-redundant services automatically replicate across all three zones — for example, Azure SQL Database and zone-redundant storage. By deploying across multiple Availability Zones, you protect against a single data centre failure. If one zone goes down, your application continues running in the others. This is the foundation of high availability within a region.
+
+One concept that is entirely unique to Azure is Region Pairs.
+
+Every Azure region is paired with another region within the same Geography, at least three hundred miles apart. Together they form a Region Pair. For example, East US is paired with West US. UK South is paired with UK West. North Europe in Ireland is paired with West Europe in the Netherlands.
+
+Region Pairs matter for several reasons. First, planned maintenance — Azure staggers updates across pairs, so your paired region is never updated at the same time as your primary region. One is always available. Second, outage recovery — if a region-wide outage occurs, Microsoft prioritises restoring one region from each pair first. Third, data replication — services like Azure Storage offer geo-redundant replication that automatically copies your data to the paired region. Fourth, compliance — since paired regions stay within the same Geography, your data never crosses a sovereignty boundary.
+
+The key takeaway here is: when designing for disaster recovery, architect your primary and secondary workloads across a Region Pair — not just any two regions.
+
+Before Availability Zones existed, Azure offered a feature called Availability Sets for protecting virtual machines against hardware failures within a single data centre.
+
+An Availability Set groups virtual machines across two dimensions. The first is Fault Domains, which protect against shared physical hardware failures — like a shared power supply or network switch. Virtual machines are spread across up to three fault domains, each representing a separate rack. The second is Update Domains, which protect against planned maintenance reboots. Virtual machines are spread across up to twenty update domains, and only one update domain is rebooted at a time during maintenance.
+
+Today, for new architectures, you should prefer Availability Zones over Availability Sets wherever zones are supported. Zones protect against entire building failures, which is a much stronger guarantee.
+
+Beyond regions and zones, Azure has a global edge network for delivering content and DNS close to end users.
+
+Azure C-D-N caches static content at edge nodes around the world. Azure Front Door is a global HTTP load balancer with a built-in C-D-N, web application firewall, and intelligent routing. Azure DNS uses anycast routing, with nodes distributed globally for fast resolution. And Azure D-DOS Protection scrubs malicious traffic at the network edge before it reaches your resources.
+
+Azure also has Edge Zones — extensions of Azure compute placed in densely populated metropolitan areas not yet served by a full region. And for ultra-low latency over five-G networks, Azure Edge Zones with carriers embed Azure compute directly inside telecom infrastructure, targeting use cases like gaming, augmented and virtual reality, autonomous vehicles, and industrial I-O-T.
+
+For governments and highly regulated industries, Azure offers Sovereign Regions — cloud infrastructure that is physically isolated from the public Azure cloud.
+
+Azure Government in the United States runs in physically separate data centres, operated by screened U-S citizens only. It meets stringent federal compliance standards including FedRAMP High, Department of Defense impact levels, and I-T-A-R.
+
+Azure China is operated by 21Vianet, a separate Chinese company. Microsoft provides the technology, but does not operate the infrastructure. All data stays within China, as required by Chinese regulations.
+
+For organisations that need to keep workloads on-premises, Azure offers two approaches.
+
+Azure Arc is a software agent you install on your existing servers. It projects Azure management capabilities — including the Azure portal, Azure Policy, role-based access control, and Microsoft Defender — onto resources running anywhere: on-premises, on other clouds, or at the edge. No hardware is shipped.
+
+Azure Stack is the opposite approach — Microsoft ships and installs physical hardware into your data centre. Azure Stack Hub lets you run Azure services locally using the same A-P-Is and the same portal as the public cloud. Azure Stack H-C-I is a hyperconverged infrastructure solution for virtualised workloads. And Azure Stack Edge is a compact appliance for running A-I inference and data processing at the network edge.
+
+To put it all together — think of Azure global infrastructure as a set of nested layers. Geographies define compliance and sovereignty boundaries. Regions provide geographic isolation. Availability Zones provide fault tolerance within a region. Region Pairs provide cross-region disaster recovery. Edge nodes and Edge Zones bring compute and content delivery even closer to users. And Arc and Stack extend Azure's reach into on-premises and hybrid environments.
+
+In the next topic, we will look at Azure Active Directory and Entra ID — the identity foundation that controls who can access all of this infrastructure and what they are allowed to do.
