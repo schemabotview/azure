@@ -1,0 +1,65 @@
+Microsoft Azure is a cloud computing platform that lets you build, deploy, and manage applications across a global network of data centers — without owning any hardware. Like all cloud platforms, the core idea is simple: instead of buying and maintaining your own servers, you rent compute, storage, networking, and dozens of other services on demand, and pay only for what you use.
+
+To appreciate why cloud computing matters, it helps to understand what came before it.
+
+In the traditional IT world, if your company needed servers, you had to buy them. That meant large upfront capital costs, weeks or even months of procurement, and your own team managing the hardware — racks, cooling systems, power, and physical security. And here is the painful part: you had to guess your capacity. Too little, and your systems go down during peak demand. Too much, and you are paying for servers sitting idle at ten or twenty percent utilization. It was expensive, slow, and inflexible.
+
+Cloud computing changes all of that. You rent resources on demand, scale up or down in minutes, and pay only for what you actually use. Need to go global? You can deploy to data centers on multiple continents in minutes, not months.
+
+Now, let us talk about Microsoft Azure specifically.
+
+Azure launched in 2010 as Windows Azure and was rebranded to Microsoft Azure in 2014. Today it is the second largest cloud provider in the world, right behind AWS. Azure offers over two hundred services spanning compute, storage, databases, artificial intelligence, networking, security, dev ops, and more — all available from data centers across the globe.
+
+A few things make Azure stand out. First, its sheer global scale — with over sixty regions worldwide, Azure has more geographic coverage than any other cloud provider. Second, its deep integration with the Microsoft ecosystem. If your organization already uses Windows Server, Active Directory, Office 365, or GitHub, Azure fits in naturally. Third, Azure has best-in-class hybrid cloud capabilities, which we will come back to in a moment.
+
+Let us now cover the four cloud deployment models — these describe how cloud infrastructure is set up and who uses it.
+
+The most common is the Public Cloud. Resources are owned and operated by a provider like Azure, AWS, or GCP, and made available to customers over the internet. You never see or touch the underlying hardware. This is what most people mean when they say "the cloud."
+
+Then there is the Private Cloud — infrastructure dedicated entirely to a single organization, either hosted on-premises or by a provider. You get more control and isolation, but also more responsibility and cost. Azure Stack Hub lets you run Azure services inside your own data center.
+
+A Hybrid Cloud combines both public and private, connected together. This is where Azure truly shines. A feature called Azure Arc lets you manage on-premises servers, Kubernetes clusters, and databases from the Azure portal as if they were native Azure resources.
+
+And finally, Multi-Cloud means using more than one public cloud provider at the same time — for example, running some workloads on Azure and others on AWS. Azure Arc actually extends into this space too, letting you manage workloads across clouds from a single control plane.
+
+Next, let us look at the three cloud service models — and how they determine how much of the stack you are responsible for.
+
+With Infrastructure as a Service, or I-a-a-S, the provider gives you the raw building blocks: virtual machines, storage, and networking. You manage the operating system, runtime, and application. Azure examples include Azure Virtual Machines, Virtual Network, and Managed Disks.
+
+With Platform as a Service, or P-a-a-S, Microsoft takes over the operating system and runtime too. You just focus on your application and data. Think Azure App Service, Azure SQL Database, or Azure Functions.
+
+And with Software as a Service, or S-a-a-S, Microsoft manages everything. You simply use the software. Microsoft three-sixty-five, Dynamics 365, and Power B-I are all examples.
+
+The key insight here is that as you move from I-a-a-S to P-a-a-S to S-a-a-S, Microsoft takes on more and more of the management burden, and you focus more on your actual business logic.
+
+This brings us to an important concept called the Shared Responsibility Model.
+
+In the cloud, security and management responsibilities are shared between you and Microsoft. Microsoft always owns and secures the physical data centers, network hardware, and hypervisor layer. As you move up the stack, responsibilities shift to you. The operating system, application, and data — your responsibilities depend on the service model you are using. But one thing never changes: you always own your data and your identities, regardless of whether you are using I-a-a-S, P-a-a-S, or S-a-a-S.
+
+Now let us go through the key benefits that Azure offers.
+
+First, high availability. Azure offers service-level agreements of up to ninety-nine point nine nine percent uptime, with built-in redundancy across availability zones.
+
+Second, scalability and elasticity. You can scale resources up or down automatically in response to demand — no manual intervention needed.
+
+Third, global reach. Sixty-plus regions let you deploy close to your users, meet data residency requirements, and build geographically redundant architectures.
+
+Fourth, security and compliance. Microsoft invests over one billion dollars per year in security. Azure meets over one hundred compliance certifications, including I-S-O 27001, S-O-C 2, G-D-P-R, and H-I-P-A-A.
+
+Fifth, cost management. You pay as you go, with options for reserved instances when your workloads are predictable, and Azure Cost Management for visibility and budgeting.
+
+Sixth, hybrid integration. Azure Arc, Azure Stack, and ExpressRoute for private connectivity from on-premises make Azure the best cloud platform for organizations with existing infrastructure they cannot simply move to the cloud overnight.
+
+Let us also quickly cover the ways you interact with Azure.
+
+The Azure Portal is a web-based graphical interface at portal.azure.com. It is great for exploration, monitoring, and one-off tasks.
+
+The Azure command-line interface, called az, is a cross-platform tool ideal for scripting and automation. You can use it on Windows, Mac, or Linux.
+
+Azure PowerShell is a module preferred in Windows-heavy and enterprise environments, letting you manage Azure resources using PowerShell syntax.
+
+The Azure S-D-Ks give you programmatic access from application code, available for Python, JavaScript, Java, dot-NET, Go, and more.
+
+Behind all of these interfaces is the Azure Resource Manager — the underlying control plane. Every portal click, every CLI command, every SDK call goes through the Resource Manager. It handles authentication, authorization, and the full lifecycle of Azure resources.
+
+That covers the foundation of cloud computing and what makes Microsoft Azure tick. In the next topic, we will go deeper into the Azure Global Infrastructure — regions, availability zones, and how it all fits together.
