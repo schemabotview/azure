@@ -1,0 +1,77 @@
+Microsoft Entra ID, formerly known as Azure Active Directory, is Microsoft's cloud-based identity and access management service. It is the foundation of security in Azure — every user, application, and service that interacts with Azure must authenticate through Entra ID first.
+
+If you are coming from AWS, the closest analogy is I-A-M. But Entra ID is significantly broader. It manages identities not just for Azure resources, but for Microsoft 365, thousands of third-party software-as-a-service applications, and your own custom applications.
+
+Before we go further, let us address a naming change that causes a lot of confusion.
+
+In July 2023, Microsoft renamed Azure Active Directory to Microsoft Entra ID, as part of a broader rebranding of its identity product family. The functionality is identical — only the branding changed. You will see both names used in documentation, in the Azure portal, and in exam questions. Throughout this topic, we will use Entra ID, but treat both names as interchangeable.
+
+Next, it is important to understand what Entra ID is not.
+
+Entra ID is not a cloud version of Windows Server Active Directory. They are different products built for different eras. Windows Server Active Directory was designed for the corporate local area network. It uses Kerberos and L-D-A-P, organises resources into domains and forests, and is managed by your own domain controllers. Entra ID was designed for the internet. It uses modern protocols like OAuth 2.0, OpenID Connect, and S-A-M-L. Its structure is flat — tenants, users, and groups. And it is queried via REST A-P-I through Microsoft Graph. Microsoft manages the infrastructure, not you.
+
+Many organisations run both. They connect them using Microsoft Entra Connect, which syncs on-premises identities to the cloud so users can sign in once and access both environments.
+
+Now let us look at the core building blocks of Entra ID, starting with the Tenant.
+
+A Tenant is a dedicated, isolated instance of Entra ID for your organisation. When a company signs up for Azure or Microsoft 365, Microsoft automatically creates a tenant. Each tenant has a unique Tenant ID and a default domain like contoso dot onmicrosoft dot com. You can also add custom domains such as contoso dot com.
+
+Tenants are completely isolated — users in one tenant cannot see users in another. One Azure subscription is associated with exactly one tenant, but one tenant can manage multiple subscriptions.
+
+Think of the tenant as the trust boundary. All identity and access decisions happen within the context of a tenant.
+
+Within a tenant, you have Users.
+
+A user in Entra ID represents a person who can sign in and access resources. Users come in two types. A Member user belongs to your own tenant — these are typically your employees and admins. A Guest user is an external user invited from another organisation or with a personal account. This is Microsoft's B-2-B model, and it lets you collaborate with partners and vendors without giving them accounts in your own tenant.
+
+Users can come from three sources. Cloud-only users are created directly in Entra ID. Synced users are managed on-premises in Windows Server Active Directory and replicated to the cloud via Entra Connect. And Federated users are authenticated by an on-premises identity provider — Entra ID trusts the result.
+
+The Global Administrator role is the most powerful role in Entra ID. It has unrestricted access to all Entra ID settings. Treat it like the AWS root account — enable multi-factor authentication on it and avoid using it for daily work.
+
+Now let us talk about Groups.
+
+Groups let you manage access for collections of users rather than individuals. There are two types of groups. Security groups are used to control access to Azure resources and applications. Microsoft 365 groups are used for collaboration — shared mailbox, calendar, Microsoft Teams, and SharePoint.
+
+Membership in a group can be Assigned, where you manually add and remove users. Or it can be Dynamic, where membership is automatically determined by rules based on user attributes. For example, a rule like "department equals Engineering" will automatically add any user with that department attribute to the group — and remove them if the attribute changes.
+
+Notice that groups in Entra ID can be nested — a group can contain other groups. This is different from AWS I-A-M, where groups cannot contain other groups.
+
+Let us now cover authentication.
+
+Entra ID supports multi-factor authentication, which requires a second factor in addition to a password. The second factor can be something you have — like the Microsoft Authenticator app, an S-M-S code, or a hardware token. It can also be something you are — like biometrics through Windows Hello.
+
+Entra ID also supports fully passwordless authentication. With Windows Hello for Business, users sign in using a biometric or a PIN that is tied to their specific device. With F-I-D-O-2 security keys, users tap a physical hardware key. With the Microsoft Authenticator app, users approve a number match on their phone — no password ever entered. Passwordless is the direction Microsoft is pushing — it is both more secure and more convenient than passwords.
+
+Entra ID also supports Self-Service Password Reset, which allows users to reset their own passwords without calling the help desk. This requires Entra ID P1 or P2.
+
+Now let us talk about how applications authenticate — because users are only half of the story.
+
+When an application needs to access Azure resources or call Microsoft A-P-Is, it must be registered in Entra ID. An App Registration is the global definition of that application — its identity, what permissions it needs, and what credentials it uses. Each registration gets a unique Application I-D and either a client secret or a certificate that the app uses to authenticate.
+
+A Service Principal is the local instance of an App Registration within a specific tenant. Think of the App Registration as a class definition, and the Service Principal as the object instance within your organisation.
+
+The biggest problem with App Registrations and client secrets is that secrets expire, get accidentally leaked, or get hardcoded into source code. Managed Identities solve this entirely.
+
+A Managed Identity is an automatically managed Service Principal in Entra ID. Azure creates and rotates the credentials for you — your code never handles a secret at all. There are two types. A System-assigned Managed Identity is tied to a specific resource — when you delete the resource, the identity is deleted too. A User-assigned Managed Identity is an independent resource — you create it separately and can assign it to multiple resources.
+
+The pattern looks like this in Python: you call Default Azure Credential, which automatically detects and uses a Managed Identity when running inside Azure. During local development, it falls back to your Azure C-L-I login. No secrets anywhere in the code.
+
+Use Managed Identities for any Azure service that needs to access other Azure services. Never store credentials in code or configuration files.
+
+Now let us talk about Conditional Access — one of the most powerful features in Entra ID.
+
+Conditional Access is Entra ID's policy engine. It evaluates signals at sign-in time and decides whether to allow, block, or challenge the access request. The model is simple: if certain conditions are true, then enforce certain controls.
+
+The conditions, or signals, can include who the user is, which group they belong to, where they are signing in from — a trusted I-P or a risky country — what device they are using and whether it is managed and compliant, which application they are trying to access, and whether Entra ID has detected a risky sign-in or a potentially compromised account.
+
+Based on those signals, the controls can block access entirely, require multi-factor authentication, require the user to be on a compliant managed device, force a password change, or limit how long a session lasts.
+
+As an example: a policy might say "require multi-factor authentication for all users signing into the Azure portal from outside the corporate network." Conditional Access requires Entra ID P1 or P2.
+
+Speaking of tiers — Entra ID comes in Free, P1, and P2 editions. The Free tier includes basic user and group management, single sign-on for limited apps, and per-user multi-factor authentication. P1 adds Conditional Access, Self-Service Password Reset, dynamic groups, and hybrid identity sync with on-premises Active Directory. P2 adds Identity Protection for risk-based policies, Privileged Identity Management, and Access Reviews. P1 is included with Microsoft 365 Business Premium.
+
+Privileged Identity Management, or P-I-M, deserves a special mention. It implements just-in-time privileged access. Instead of a user permanently holding the Global Administrator role — which is a significant security risk — P-I-M makes them eligible for the role. When they need to perform an admin task, they explicitly activate the role for a limited time window, provide a justification, and the role expires automatically afterward. This dramatically reduces the attack surface by eliminating standing privileged access.
+
+To summarise. Entra ID is Microsoft's cloud identity platform — the foundation of security for Azure, Microsoft 365, and thousands of connected applications. The Tenant is your isolated identity boundary. Users can be members or guests, from the cloud or synced from on-premises. Groups let you manage access at scale, with dynamic membership rules. Multi-factor authentication and passwordless sign-in protect accounts. App Registrations and Service Principals give applications an identity. Managed Identities remove the need to manage secrets entirely. Conditional Access enforces policies based on real-time signals. And Privileged Identity Management ensures that powerful roles are activated only when needed, for only as long as needed.
+
+In the next topic, we will look at R-B-A-C and Azure Policy — the layer that controls what authenticated identities are actually allowed to do with Azure resources.

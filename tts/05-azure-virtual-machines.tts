@@ -1,0 +1,53 @@
+Azure Virtual Machines is Azure's Infrastructure as a Service compute offering. It lets you run Windows or Linux servers in the cloud without managing physical hardware. Virtual machines give you full control over the operating system, installed software, and configuration — but you are responsible for patching, scaling, and availability. They are the foundation of many Azure architectures, and understanding them deeply is important before moving to higher-level services like App Service or Azure Kubernetes Service.
+
+Let us start with what you configure when deploying a virtual machine.
+
+When you create a VM, you choose an image — the operating system and pre-installed software. You choose a size — the combination of virtual CPUs, memory, and local storage. You configure authentication — either an S-S-H key pair for Linux or a username and password, with Azure A-D login also available. You connect the VM to a Virtual Network subnet, optionally assign a public I-P address, and attach a Network Security Group to control traffic. You configure the OS disk and any additional data disks. You can assign a Managed Identity so the VM can access other Azure services without storing credentials. And you can pass custom data — a script that runs automatically on first boot.
+
+Let us go deeper into each of these areas. Starting with images.
+
+An image is a template that contains the operating system, optional pre-installed software, and disk layout. Images come from three sources. Azure Marketplace has thousands of first-party and third-party images — Windows Server, Ubuntu, Red Hat, SQL Server on Windows, and many pre-configured application stacks. The Azure Compute Gallery is where you store your own custom images. It supports versioned image definitions, automatic replication across regions, and sharing images across subscriptions and tenants. For a simple one-off capture of an existing VM, you can create a Managed Image.
+
+Within the Azure Compute Gallery, images can be either generalised or specialised. A generalised image has been cleaned of machine-specific data — hostname, user accounts — using Sysprep on Windows or waagent on Linux. It is used to create many identical V-Ms. A specialised image is an exact copy of a VM including all its state, useful for disaster recovery or migration.
+
+Now let us talk about VM sizes.
+
+VM sizes follow a naming convention. The name starts with "Standard underscore", followed by the series letter, then the number of virtual CPUs, optional feature suffixes, and a version number. For example, Standard D 4 s underscore v 5 is a fourth-generation D-series VM with four virtual CPUs and the s suffix indicating Premium S-S-D support.
+
+The series letter tells you what the VM is optimised for. B-series are burstable — they run at a baseline CPU level and earn credits when idle, spending those credits during bursts. This is the same concept as AWS T-series instances, and B-series is ideal for dev and test workloads or low-traffic applications. D-series is general purpose with a balanced ratio of CPU to memory — the workhorse for web servers, application tiers, and small databases. E-series is memory optimised, with a higher memory-to-CPU ratio, suited for in-memory databases and S-A-P H-A-N-A. F-series is compute optimised with a higher CPU-to-memory ratio, good for batch processing and gaming servers. L-series is storage optimised with high disk throughput and I-O-P-S, suited for NoSQL databases and data warehouses. M-series covers very large memory configurations. And N-series VMs include GPUs — N-C for machine learning training, N-D for inference, and N-V for visualisation workloads.
+
+Let us move on to disks.
+
+Every Azure VM has an OS disk, which is a managed disk containing the operating system. It always persists across stop and start operations. Many VM sizes also include a temporary disk — a local S-S-D physically attached to the host server. The temporary disk is fast, but it is not persistent. It is lost whenever the VM is deallocated, resized, or moved to a new host. Use it only for swap space, caches, or scratch data. On Linux it is mounted as slash dev slash sdb. On Windows it is the D drive.
+
+For application data, you attach data disks — these are additional managed disks that persist independently of the VM lifecycle.
+
+Azure offers five managed disk types at increasing performance tiers. Standard H-D-D is magnetic spinning disk, suitable for backups and rarely accessed data. Standard S-S-D is entry-level solid-state, good for web servers with modest I-O requirements. Premium S-S-D is the standard choice for production workloads, offering up to twenty thousand I-O-P-S per disk. Premium S-S-D version 2 goes further, supporting up to eighty thousand I-O-P-S with independently tunable I-O-P-S and throughput settings. And Ultra Disk supports up to one hundred and sixty thousand I-O-P-S with sub-millisecond latency, reserved for the most demanding database workloads.
+
+By default, all managed disks are encrypted at rest using platform-managed keys. You can also bring your own keys stored in Azure Key Vault. For full-volume encryption using BitLocker on Windows or D-M-Crypt on Linux, use Azure Disk Encryption.
+
+Now let us look at VM networking.
+
+Every Azure VM has at least one Network Interface Card, called a NIC. The NIC attaches to a subnet within a Virtual Network and gets a private IP address from the subnet's address range. This private IP can be dynamic — assigned automatically — or static. You can optionally associate a public IP address with the NIC for internet-facing VMs.
+
+Network Security Groups, or N-S-Gs, are stateful firewalls that filter traffic. An N-S-G contains a list of rules, each with a priority number between 100 and 4096. Lower numbers are evaluated first. Each rule specifies the direction — inbound or outbound — the protocol, the source, the destination, and whether to Allow or Deny. N-S-Gs can be attached at the subnet level, the N-I-C level, or both. When both are attached, traffic must pass through both N-S-Gs.
+
+Every N-S-G comes with built-in default rules that cannot be deleted. These allow traffic within the Virtual Network and from the Azure Load Balancer, and deny everything else inbound. All outbound traffic is allowed by default.
+
+For cleaner N-S-G rules, use Application Security Groups. Instead of writing rules based on IP addresses, you tag your virtual machines with an Application Security Group — for example, A-S-G-web, A-S-G-app, A-S-G-database — and write N-S-G rules that reference those group names. This makes the rules readable and easy to maintain as the infrastructure grows.
+
+For bootstrapping VMs at creation time, you use Custom Data — a cloud-init script or shell script passed when the VM is created. It runs once on first boot. For running scripts on already-deployed VMs, use VM Extensions. The Custom Script Extension lets you run any script on a running VM. Other extensions deploy the Azure Monitor Agent for logging and metrics, enable Entra I-D login over S-S-H, or enforce Desired State Configuration on Windows servers.
+
+Now let us talk about pricing.
+
+Pay-as-you-go is the baseline — you pay per second of running time with no commitment. Reserved VM Instances lock in one or three year commitments in exchange for discounts of up to seventy-two percent — the right choice for workloads running continuously. Azure Savings Plans are more flexible than reservations — you commit to a spend amount per hour and the discount applies across any VM size or region.
+
+Spot VMs use spare capacity at discounts of up to ninety percent. Azure can evict them with just thirty seconds of warning, which is shorter than AWS's two minute notice. You set an eviction policy — either Deallocate, which stops the VM but preserves the disks so you can restart later, or Delete, which removes everything. Use Spot VMs for batch jobs, rendering pipelines, C-I-C-D runners, and stateless workers behind a load balancer. Never for databases or anything stateful.
+
+Azure Hybrid Benefit is unique to Azure. If your organisation owns on-premises Windows Server or SQL Server licences with Software Assurance, you can apply them to Azure V-Ms, eliminating the licensing cost embedded in the VM price. This can save up to forty-nine percent on Windows VM costs.
+
+One more critical operational point about billing. If you stop a VM from within the operating system — by running shutdown in the terminal or through Windows shutdown — the VM enters a Stopped state but is still allocated to a host. You continue to be billed for compute. To stop billing, you must Deallocate the VM — either from the Azure portal, the Azure C-L-I, or the S-D-K. When a VM is deallocated, the public I-P address changes if it was dynamic, and the VM may move to a different host when restarted. This is a very common source of unexpected costs for teams new to Azure.
+
+For availability, a single VM with Premium S-S-D storage gets a 99.9 percent uptime S-L-A. Placing VMs in an Availability Set raises that to 99.95 percent by spreading them across fault domains and update domains within one datacentre. Placing VMs across Availability Zones raises it further to 99.99 percent by spreading them across physically separate buildings in the region. For new designs, prefer Availability Zones.
+
+In the next topic, we will look at V-M Scale Sets and how to build elastically scaling VM fleets.

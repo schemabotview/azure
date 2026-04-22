@@ -1,0 +1,67 @@
+In Azure, security is split across two distinct layers that work together. Entra ID handles authentication — proving who you are. Azure R-B-A-C handles authorisation — deciding what you are allowed to do with Azure resources. And Azure Policy handles governance — enforcing what resources are allowed to look like in the first place.
+
+Understanding the boundary between these layers is essential for designing secure Azure architectures.
+
+Let us start by clearing up one of the most common points of confusion in Azure: the difference between Entra ID roles and Azure R-B-A-C roles.
+
+Entra ID roles control access to Entra ID features — things like managing users, groups, and applications. The Global Administrator and User Administrator roles are Entra ID roles. Azure R-B-A-C roles control access to Azure resources — things like virtual machines, storage accounts, and databases. The Owner, Contributor, and Reader roles are Azure R-B-A-C roles.
+
+These two role systems are completely separate. A Global Administrator in Entra ID can manage users and groups, but cannot create a virtual machine unless they are also assigned an Azure R-B-A-C role. A Contributor in Azure R-B-A-C can create any Azure resource, but cannot manage Entra ID users.
+
+Now let us look at how Azure R-B-A-C works. The foundation is the scope hierarchy.
+
+Azure resources are organised in four levels, from broadest to narrowest: Management Group, then Subscription, then Resource Group, then individual Resource. This forms a tree, and permissions flow downward. A role assigned at a higher scope is automatically inherited by all child scopes beneath it.
+
+For example, if Alice is assigned the Contributor role at the Subscription level, she can create and modify resources in every resource group within that subscription. If Bob is assigned Reader only at a specific Resource Group, he can view resources only within that one group. And if Carol is assigned Owner on a single Storage Account, she has full control only over that one storage account.
+
+Assigning roles at the narrowest scope needed is how you implement the principle of least privilege in Azure.
+
+Now let us look at the built-in roles.
+
+Azure ships with hundreds of built-in roles, but four fundamental ones apply across every resource type. Owner has full access to all resources and can also assign R-B-A-C roles to others. Contributor can create and manage all resources, but cannot grant access to others. Reader can view all resources but make no changes. And User Access Administrator can manage R-B-A-C role assignments, but has no access to resources themselves.
+
+Beyond these four, there are many service-specific built-in roles. For example, Virtual Machine Contributor can create and manage virtual machines but not networking resources. Storage Blob Data Contributor can read, write, and delete blob data. Key Vault Secrets User can read secrets from a Key Vault. And A-C-R Pull allows pulling container images from Azure Container Registry. Prefer built-in roles over custom roles wherever possible — they are maintained by Microsoft and cover most scenarios.
+
+A role assignment is what makes a role active. It has three parts: who, what, and where. Who is the security principal — a user, a group, a service principal, or a managed identity. What is the role definition. Where is the scope.
+
+An important best practice: assign roles to groups rather than individual users. When a new employee joins, add them to the right group, and they immediately inherit the correct permissions. When they leave, remove them from the group. You never need to touch the role assignments themselves.
+
+When no built-in role fits your needs exactly, you can create a custom role. A custom role is a JSON definition that specifies which actions to allow. The Actions field covers management plane operations — things like creating or reading resources. The Data Actions field covers data plane operations — things like reading blob data or sending messages to a queue. You also specify Assignable Scopes, which control which subscriptions or management groups the role can be used in.
+
+Now let us talk about how Azure evaluates R-B-A-C when a request comes in.
+
+The first thing Azure checks is whether there is a Deny assignment covering the requested action. Deny assignments always win — they block the request regardless of any Allow roles. Unlike AWS, where you write deny rules yourself in policies, Azure deny assignments are created only by the platform — for example, when Azure Blueprints locks resources to prevent modification.
+
+If there is no deny assignment, Azure checks whether any role assignment at any scope allows the action. Here is the key difference from AWS: in Azure, multiple Allow role assignments accumulate. A user's effective permissions are the union of all their role assignments across all scopes. If the combined set of roles allows the action, it proceeds. If nothing allows it, access is denied implicitly.
+
+Before we move on to Azure Policy, let us briefly cover Management Groups.
+
+Management Groups sit above subscriptions in the hierarchy. They let you organise subscriptions into a tree for governance at scale. A typical enterprise structure might have a root Management Group, with child groups for Platform, Landing Zones, and Sandbox. The Landing Zones group might contain Production and Development sub-groups, each holding multiple subscriptions.
+
+When you assign an R-B-A-C role or an Azure Policy at the Management Group level, it applies automatically to every subscription and resource within the entire subtree. Management Groups are Azure's equivalent of AWS Organisations O-Us — the governance layer above individual subscriptions.
+
+Now let us look at Azure Policy.
+
+While R-B-A-C controls who can take an action, Azure Policy controls what resources are allowed to look like. Policy works independently of who creates the resource. It evaluates resources against rules and enforces organisational standards at scale.
+
+For example, a policy might deny creation of any virtual machine that is missing the Environment tag. Another policy might require all storage accounts to use H-T-T-P-S only. Another might automatically deploy a Log Analytics agent to every new virtual machine.
+
+The most important concept in Azure Policy is the effect — what happens when the policy condition is matched.
+
+Deny blocks the resource request outright at creation or update time. Audit allows the resource but logs a compliance warning — nothing is blocked. Append adds fields to the resource request, for example forcing a tag to be applied. Modify adds, updates, or removes properties. DeployIfNotExists runs after the resource is created — if a related resource is missing, Azure deploys it automatically. AuditIfNotExists scans existing resources and logs a warning if a related resource is missing.
+
+When rolling out a new policy, start with the Audit effect to understand the impact. Once you have remediated existing non-compliant resources, switch to Deny to prevent new violations.
+
+A policy definition is the JSON document that describes the condition and the effect. Azure ships with hundreds of built-in definitions. You can also write custom definitions for organisation-specific rules. The condition in the policy rule uses field-based expressions — for example, checking whether a resource type equals a virtual machine and whether a tag is missing.
+
+When you have multiple related policies, group them into an initiative — also called a policy set. An initiative is a collection of policy definitions with a common goal, like implementing a regulatory standard. Azure ships built-in initiatives for the Azure Security Benchmark, C-I-S Microsoft Azure Foundations, N-I-S-T S-P 800-53, I-S-O 27001, and P-C-I D-S-S. Assign one initiative instead of individual policies, and your compliance is reported as a single score.
+
+A policy assignment is what makes a definition or initiative active at a specific scope. You choose the scope — Management Group, Subscription, or Resource Group — and optionally exclude certain child scopes. For DeployIfNotExists and Modify effects, you provide a Managed Identity that Azure uses to perform the remediation.
+
+The compliance dashboard in the Azure portal shows your overall compliance percentage per initiative, lists non-compliant resources, and shows compliance history over time. New resources are evaluated within thirty minutes of creation. Existing resources are scanned on a twenty-four hour cycle.
+
+Let us bring it all together with a few best practices.
+
+Assign roles to groups rather than individuals. Use the narrowest scope needed. Prefer built-in roles. Use Managed Identities for services accessing other Azure resources. When introducing a new Azure Policy, start with Audit before switching to Deny. Apply policies at the Management Group level for consistent governance across all subscriptions. And use Privileged Identity Management for privileged R-B-A-C roles to eliminate standing access.
+
+In the next topic, we will shift to compute — starting with Azure Virtual Machines.
