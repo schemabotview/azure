@@ -1,0 +1,53 @@
+Once you have isolated V-Nets, you need ways to connect them — to each other and to on-premises networks. Azure provides three primary mechanisms. V-Net Peering is a direct, low-latency connection between two V-Nets over the Azure backbone. V-P-N Gateway establishes encrypted I-P-sec tunnels over the public internet to on-premises networks or other V-Nets. And ExpressRoute provides a private, dedicated circuit from your on-premises network to Azure, bypassing the internet entirely. Each option has different trade-offs in cost, latency, bandwidth, and complexity.
+
+Let us start with V-Net Peering.
+
+V-Net Peering connects two V-Nets so their resources can communicate privately using private I-P addresses over the Azure backbone — with low latency and high bandwidth, equivalent to resources in the same V-Net. There are two types: regional peering connects two V-Nets in the same Azure region, and global peering connects V-Nets in different Azure regions. Both are functionally identical; global peering has a slightly higher data transfer cost.
+
+There are four important properties of V-Net peering. First, peering is non-transitive. If you peer V-Net A with V-Net B, and V-Net B with V-Net C, V-Net A does not automatically have access to V-Net C. You must peer A and C explicitly, or use a hub-and-spoke design where a central hub forwards traffic between spokes. Second, peering is bidirectional but separately configured — you create a peering resource in both V-Nets, and each side has its own settings. Third, the V-Nets being peered must have non-overlapping C-I-D-R blocks — overlapping address spaces prevent peering. Fourth, peering works across subscriptions and across Entra I-D tenants, which is useful for large enterprise topologies.
+
+Each peering has configurable settings. Allow gateway transit, when set on the hub side, lets the peered spoke V-Net use this V-Net's V-P-N or ExpressRoute gateway to reach on-premises. Use remote gateways, set on the spoke side, tells the spoke to use the hub's gateway. Allow forwarded traffic accepts packets that did not originate in the peered V-Net, which is required for hub-and-spoke traffic flows. And allow virtual network access enables or disables all traffic between the two V-Nets — it is enabled by default.
+
+The hub-and-spoke topology is the most common enterprise V-Net design. A central hub V-Net holds shared services: the V-P-N or ExpressRoute gateway, Azure Firewall, Bastion, and D-N-S. Individual workload V-Nets — called spokes — are each peered to the hub. Traffic between two spokes flows through the hub where the firewall can inspect it. To give spokes on-premises connectivity, you enable gateway transit on the hub's peering and use remote gateways on each spoke's peering, so spoke resources route on-premises traffic via the hub's gateway.
+
+Now let us look at V-P-N Gateway.
+
+Azure V-P-N Gateway establishes encrypted I-P-sec and I-K-E-v2 tunnels between your Azure V-Net and on-premises networks or other V-Nets. The gateway is deployed into a dedicated subnet named GatewaySubnet — it must be a slash 27 or larger. A V-P-N Gateway supports several S-K-Us with increasing throughput. The VpnGw1 S-K-U delivers 650 megabits per second with up to 30 site-to-site tunnels. VpnGw5 reaches 10 gigabits per second with 100 tunnels. Each S-K-U has a zone-redundant A-Z variant — for example VpnGw1AZ — which survives an availability zone failure. The Basic S-K-U should be avoided for new deployments as it does not support active-active mode, B-G-P, or resizing.
+
+There are three connection types. Site-to-Site, or S2S, creates a persistent I-P-sec tunnel from an on-premises V-P-N device to the Azure V-P-N Gateway — the on-premises device must have a public I-P address. Point-to-Site, or P2S, lets individual client devices such as laptops connect to the V-Net without a V-P-N appliance on-premises. VNet-to-VNet creates an I-P-sec tunnel between two Azure V-P-N Gateways — though V-Net Peering is preferred when both V-Nets are in Azure.
+
+For a Site-to-Site connection you also create a Local Network Gateway resource in Azure — this represents the on-premises V-P-N device and contains its public I-P address and the on-premises address ranges. You then create a connection resource that links the Azure V-P-N Gateway, the Local Network Gateway, and a pre-shared key that must match what you configure on the on-premises device. V-P-N Gateway supports B-G-P for dynamic route exchange, which is useful when on-premises routes change frequently and you do not want to update the Local Network Gateway manually each time.
+
+For Point-to-Site connections, clients can use OpenV-P-N which works on Windows, Linux, macOS, iOS, and Android; I-K-E-v2 for native clients on Windows and macOS; or S-S-T-P which is Windows-only but uses H-T-T-P-S port 443 so it traverses most corporate firewalls. Authentication can be via Azure certificates, Entra I-D using OAuth 2.0, or a R-A-D-I-U-S server.
+
+V-P-N Gateway high availability comes in two modes. Active-standby is the default — one instance is active and a standby takes over in roughly 10 to 90 seconds on failure. Active-active deploys both instances simultaneously, each maintaining an I-P-sec tunnel to the on-premises device — failover is significantly faster.
+
+Now let us look at ExpressRoute.
+
+Azure ExpressRoute provides a private, dedicated network connection from your on-premises infrastructure to Azure, bypassing the public internet entirely. The connection is provisioned through an ExpressRoute partner — a network service provider such as AT&T, Equinix, or Verizon — or directly via ExpressRoute Direct for very high bandwidth requirements. Your on-premises router connects to the partner's edge in a colocation facility, and the partner's network connects to the Microsoft edge via a B-G-P session over a private cross-connect.
+
+ExpressRoute circuits come in three S-K-Us. The Local S-K-U connects to a single Azure region near the peering location and includes unlimited outbound data transfer — cost-effective if your workloads are in a single nearby region. The Standard S-K-U connects to all regions within the same geopolitical area, such as all of North America or all of Europe. The Premium S-K-U connects to any Azure region globally and is required for accessing Microsoft 365 and for ExpressRoute Global Reach.
+
+Bandwidth options range from 50 megabits per second up to 10 gigabits per second, provisioned by the partner. ExpressRoute Direct provides 10 or 100 gigabit per second ports connected directly to the Microsoft global network — for customers with the highest bandwidth requirements.
+
+ExpressRoute uses two B-G-P peering sessions. Azure private peering carries traffic to and from your Azure V-Nets — your private resources. Microsoft peering carries traffic to Microsoft 365, Dynamics 365, and Azure P-a-a-S public endpoints. Public peering was retired and Microsoft peering replaced it.
+
+ExpressRoute Global Reach links two ExpressRoute circuits together through the Microsoft backbone. This allows two on-premises sites — for example a data centre in New York and one in London — to communicate via Microsoft's private network without any traffic touching the public internet.
+
+ExpressRoute FastPath improves performance for high-bandwidth circuits. By default, all ExpressRoute traffic passes through the ExpressRoute Gateway, adding a small forwarding hop. FastPath bypasses the gateway for data-plane traffic, routing it directly to V-Net resources, reducing latency and increasing throughput.
+
+For high availability, each ExpressRoute circuit has two connections — primary and secondary — from the provider edge to two separate Microsoft edge routers, eliminating a single point of failure at the edge. For full redundancy, the recommended architecture is two circuits from two different peering locations connected to your ExpressRoute Gateway.
+
+Now let us compare ExpressRoute and V-P-N Gateway.
+
+V-P-N Gateway is cheaper, provisions in minutes to hours, and sends traffic over the encrypted public internet. ExpressRoute is more expensive, takes weeks to provision through a partner, but provides a private dedicated connection with consistent low latency and high bandwidth. Use V-P-N Gateway for branch offices and remote access where the internet is acceptable and cost matters. Use ExpressRoute for enterprise data centres, compliance scenarios, and workloads requiring consistent latency or very high bandwidth.
+
+You can deploy both simultaneously on the same V-Net — ExpressRoute as the primary path and V-P-N as a failover. If the ExpressRoute circuit fails, traffic automatically falls over to the V-P-N tunnel.
+
+Finally, let us look at Azure Virtual W-A-N.
+
+Azure Virtual W-A-N is a managed networking service that simplifies hub-and-spoke topologies at scale. Instead of manually configuring peerings, gateways, and route tables, you create a Virtual Hub — a Microsoft-managed hub V-Net — and connect branch offices via S2S V-P-N, remote users via P2S V-P-N, data centres via ExpressRoute, and spoke V-Nets via hub connections. Azure handles all route propagation, gateway management, and transit routing between branches and spokes automatically. The Standard S-K-U adds inter-hub transit so traffic between hubs in different regions is handled automatically. Use Virtual W-A-N when you have many branches and spokes and want to avoid the operational complexity of managing a manual hub-and-spoke.
+
+To summarise. Use V-Net Peering for connecting Azure V-Nets — it is the fastest, cheapest, and simplest option. Remember peering is non-transitive and requires non-overlapping address spaces. Use a hub-and-spoke design with gateway transit to give all spokes on-premises connectivity through a single gateway. Use V-P-N Gateway for site-to-site and point-to-site connections over the internet. Use ExpressRoute for private, high-bandwidth, low-latency connectivity to Azure from enterprise data centres. Deploy both V-P-N and ExpressRoute together for primary and failover paths. And use Azure Virtual W-A-N when scale and simplicity matter more than per-connection customisation.
+
+In the next topic, we will look at Azure Load Balancer and Application Gateway — the services that distribute traffic across multiple instances of your applications.
