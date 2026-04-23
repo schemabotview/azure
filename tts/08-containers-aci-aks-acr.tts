@@ -1,0 +1,57 @@
+Azure offers a full container platform spanning multiple abstraction levels. Azure Container Registry stores and manages your container images. Azure Container Instances lets you run a container directly with no orchestration needed. Azure Kubernetes Service gives you production-grade Kubernetes with a managed control plane. And Azure Container Apps sits between ACI and AKS, providing a managed Kubernetes-based platform that hides cluster complexity entirely.
+
+Before diving into each service, let us briefly establish why containers matter.
+
+A container packages your application code, runtime, and libraries into a single portable unit that runs consistently across any environment. Compared to virtual machines, containers are lighter — they share the host operating system's kernel rather than running a full guest OS. They start in seconds, not minutes. Compared to serverless functions, containers support longer-running processes, give you more control over the runtime environment, and let you run the same image locally and in production. They are ideal for microservices, long-running background workers, and workloads you are migrating from on-premises Docker environments.
+
+Let us start with Azure Container Registry, or A-C-R.
+
+A-C-R is Azure's managed private Docker container registry — the equivalent of AWS E-C-R. It stores and distributes container images and Helm charts, integrated with Entra I-D and Azure R-B-A-C. A-C-R comes in three S-K-Us. The Basic tier is for development and testing with limited storage and throughput. The Standard tier is the production default. The Premium tier adds geo-replication, private endpoints, dedicated data endpoints, and customer-managed encryption keys.
+
+For authentication, the recommended approach for Azure services like AKS, ACI, and App Service is Managed Identity — no credentials to manage or rotate. For C-I-C-D pipelines like GitHub Actions or Azure DevOps, use a Service Principal. The admin user option provides a single username and password — only use it for quick local testing.
+
+A-C-R Tasks let you build container images in the cloud without a local Docker installation. A quick task is an on-demand build triggered by the A-Z CLI. A triggered task rebuilds automatically when you push to a Git repository or when the base image is updated. A scheduled task rebuilds on a cron schedule — useful for nightly security patch refreshes.
+
+The Premium tier's geo-replication feature replicates your registry to multiple Azure regions. AKS clusters in each region pull images from a local replica, reducing latency and eliminating cross-region egress costs.
+
+Now let us look at Azure Container Instances.
+
+ACI is the fastest way to run a container in Azure — no clusters, no orchestration, no node management. You describe what you want and Azure starts it in seconds. ACI is ideal for one-off batch jobs, C-I-C-D pipeline build agents, development and testing environments, and burst capacity from AKS.
+
+The top-level ACI resource is a container group — a collection of containers that share a lifecycle, network, and storage volumes. This maps directly to a Kubernetes Pod. Containers within a group share the same IP address and can communicate with each other over localhost. You can also attach init containers that run to completion before the main containers start — useful for setup tasks like database migrations.
+
+For networking, ACI supports two modes. Public IP mode assigns a public IP address and an optional DNS label to the container group. VNet injection deploys the container group into a subnet in your Virtual Network, giving it a private IP accessible only within the VNet.
+
+ACI restart policies control what happens when a container exits. The Always policy restarts on any exit — for long-running services. The OnFailure policy restarts only if the container exits with a non-zero code — for batch jobs that might succeed. The Never policy means the container runs once and is not restarted — for truly one-off tasks.
+
+Now let us go deeper into Azure Kubernetes Service, or AKS.
+
+AKS is Azure's managed Kubernetes service. Azure manages the entire control plane — the A-P-I server, etcd state store, scheduler, and controller manager — at no additional cost. You pay only for the worker node VMs in your subscription.
+
+Every AKS cluster has at least one system node pool, which runs AKS system components like the DNS server and metrics server. It is tainted to prevent your application pods from being scheduled there. You add user node pools for your application workloads.
+
+The power of multiple node pools is that you can configure each independently. You might have a general-purpose pool of standard D-series VMs for most workloads, a GPU pool using N-series VMs for machine learning inference, and a Spot pool for fault-tolerant batch jobs at a fraction of the cost. Each pool autoscales independently within its own minimum and maximum bounds.
+
+A unique AKS feature is Virtual Nodes. A Virtual Node is a special node pool backed by ACI rather than real VMs. Pods scheduled onto virtual nodes run as ACI container instances — they start in seconds and require no pre-provisioned capacity. Use virtual nodes for burst workloads: normal pods run on VM node pools, and excess pods spill onto ACI automatically.
+
+AKS supports several network plugins. Kubenet uses an overlay network where pods get IP addresses from a private range separate from the VNet. It conserves VNet IP space but adds some routing overhead. Azure C-N-I assigns real VNet IP addresses to every pod — they are directly routable within the VNet and accessible from peered networks and private endpoints. Azure C-N-I is the recommended choice for production clusters. There are also newer variants including Azure C-N-I Overlay and Azure C-N-I powered by Cilium, which use the e-B-P-F-based Cilium dataplane for higher performance and richer network policies.
+
+For exposing services externally, AKS uses ingress controllers. The N-G-I-N-X Ingress Controller is the community standard, deployed via Helm. The Azure Application Gateway Ingress Controller, known as A-G-I-C, uses Azure Application Gateway as the ingress — which includes a built-in web application firewall. When you create a Kubernetes service of type Load Balancer, AKS automatically provisions an Azure Load Balancer and assigns it a public or internal IP.
+
+AKS supports scaling at two levels — pods and nodes. For pod scaling, the Horizontal Pod Autoscaler adjusts the number of pod replicas based on CPU, memory, or custom metrics. KEDA, which stands for Kubernetes Event-Driven Autoscaling, extends this further by allowing pods to scale to zero based on event sources — like the length of a Service Bus queue, the number of pending HTTP requests, or the depth of a Cosmos D-B change feed. KEDA is built into AKS and makes containerised workloads behave like serverless functions.
+
+For node scaling, the Cluster Autoscaler adds nodes when pods cannot be scheduled due to insufficient capacity, and removes underutilised nodes when pods can be rescheduled elsewhere. You configure the minimum and maximum node count per pool, and the autoscaler handles the rest.
+
+AKS integrates deeply with the broader Azure ecosystem. Attaching an ACR to AKS with a single command grants the cluster's Managed Identity the A-C-R Pull role — nodes can pull images without any stored credentials. Entra I-D integration allows users to authenticate to the Kubernetes A-P-I server with their Entra I-D token, and you can map Entra I-D groups to Kubernetes R-B-A-C roles. The Secrets Store C-S-I Driver mounts Key Vault secrets and certificates directly as files or environment variables in pods, again using Managed Identity. Container Insights collects logs and metrics from all pods and nodes into a Log Analytics workspace.
+
+AKS upgrades follow a two-step process. First the control plane is upgraded — this is briefly disruptive to A-P-I calls but does not affect running workloads. Then node pools are upgraded one node at a time: Azure cordons the node so no new pods are scheduled, drains the existing pods to other nodes, reimages the node with the new Kubernetes version, and brings it back online.
+
+You can configure an upgrade channel to automate this process. The node-image channel is the minimum recommended setting — it applies O-S security patches to nodes automatically without changing the Kubernetes version. The patch channel auto-upgrades to the latest patch release within your current minor version. The stable and rapid channels auto-upgrade to newer Kubernetes minor versions.
+
+Let me also briefly cover Azure Container Apps, as it is increasingly the go-to choice for new microservices workloads.
+
+Container Apps is a managed platform built on Kubernetes and KEDA. You deploy containerised applications without writing Kubernetes Y-A-M-L or managing node pools. It scales to zero out of the box, has built-in H-T-T-P routing and ingress, and includes native Dapr integration. Dapr is a runtime that provides service discovery, publish-subscribe messaging, state management, and secret access via a sidecar — with no S-D-K changes to your application code. Container Apps sits between ACI and AKS: simpler than AKS but more capable than ACI.
+
+To summarise the decision guide. Use ACI for one-off jobs and batch tasks where you need no orchestration overhead. Use ACI Virtual Nodes from AKS for burst capacity. Use Container Apps for event-driven microservices and applications that should scale to zero. Use AKS when you need full Kubernetes control — for existing Kubernetes workloads, GPU workloads, advanced scheduling, or multi-cloud portability. And use ACR as your private image registry for all of these services.
+
+In the next topic, we will look at Azure Blob Storage — the foundation of Azure's object storage platform.
