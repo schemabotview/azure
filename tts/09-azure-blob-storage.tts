@@ -1,0 +1,63 @@
+Azure Blob Storage is Azure's object storage service — massively scalable, highly durable, and foundational to virtually every Azure architecture. It stores unstructured data such as files, images, videos, backups, logs, and data lake files as objects called blobs inside containers, accessed over H-T-T-P-S. Blob Storage is the Azure equivalent of A-W-S S-3. The hierarchy is Storage Account, then Container, then Blob — compared to S-3's Account, Bucket, and Object.
+
+A Storage Account is the top-level namespace for all Azure Storage services including Blob, Files, Queues, and Tables. Every storage account has a globally unique name that forms part of the endpoint U-R-L. For blob storage the endpoint looks like: the account name dot blob dot core dot windows dot net, followed by the container name and blob name.
+
+There are several storage account types. Standard General Purpose V-2, or G-P-v2, is the default choice and supports Blob, Files, Queues, and Tables along with all access tiers. Premium Block Blob is S-S-D-backed for high-throughput, low-latency blob workloads — it does not support access tiers. Premium Page Blob is for legacy Azure V-M unmanaged disks that need random read and write access. For almost all new workloads you should use Standard G-P-v2 as it supports all blob features including lifecycle management and access tiers.
+
+Now let us look at redundancy options.
+
+Azure Storage redundancy is configured per storage account and determines how many copies of your data exist and where. There are six options. L-R-S, or Locally Redundant Storage, stores three copies within a single data centre and is the cheapest option — suitable for development and test or data that can be recreated. Z-R-S, or Zone Redundant Storage, stores three copies across three availability zones in the same region and provides twelve nines of durability — this is the recommended choice for production. G-R-S, or Geo-Redundant Storage, stores six copies — three locally using L-R-S in the primary region, and three more asynchronously replicated to a secondary region. This provides sixteen nines of durability and protects against a full regional outage. G-Z-R-S, or Geo-Zone Redundant Storage, combines zone redundancy in the primary region with geo-replication to the secondary — the highest durability tier. R-A-G-R-S and R-A-G-Z-R-S add read access to the secondary region endpoint at all times, without waiting for a failover.
+
+When choosing redundancy, start by asking whether you need disaster recovery across regions. If yes, use G-R-S or G-Z-R-S. If you also need to read from the secondary without triggering a failover, use R-A-G-R-S or R-A-G-Z-R-S. If you do not need cross-region replication, ask whether you need to survive a zone failure. If yes, use Z-R-S. If a single data centre is acceptable, use L-R-S.
+
+Let us now look at containers and blob types.
+
+A container organises blobs — similar to an S-3 bucket but nested inside a storage account. Container names must be between 3 and 63 characters, use only lowercase letters, numbers, and hyphens. Public access can be set to Private by default, Blob for anonymous read on individual blobs, or Container for anonymous listing and read.
+
+There are three blob types. Block Blobs are composed of blocks and are optimised for sequential uploads — this is the type you use for files, images, videos, backups, and data lake workloads. It is the default type. Append Blobs allow blocks to only be appended — not modified or deleted — making them ideal for log files, audit trails, and streaming data. Page Blobs use 512-byte pages and support random read and write — they were used for Azure V-M unmanaged disks, but Managed Disks have replaced them for V-M storage.
+
+For large Block Blobs, you upload multiple blocks in parallel and then commit them with a block list — this is analogous to S-3 multipart upload. A single block can be up to 4,000 megabytes and a blob can be up to 190 terabytes in total. The Python SDK handles parallel block uploads automatically when you configure maximum concurrency.
+
+Now let us explore access tiers.
+
+Access tiers balance storage cost against access cost. You set a default tier at the account level and can override it per blob. There are four tiers. The Hot tier has the highest storage cost but the lowest access cost — use it for frequently accessed data. The Cool tier has lower storage cost with a 30-day minimum storage duration — use it for data accessed infrequently but that must remain immediately readable. The Cold tier goes even lower in storage cost with a 90-day minimum — for rarely accessed but still online data. The Archive tier has the lowest storage cost but the highest access cost and a 180-day minimum. Blobs in Archive are offline and cannot be read directly.
+
+To access an archived blob you must first rehydrate it by changing its tier to Hot, Cool, or Cold. Standard rehydration takes up to 15 hours. High-priority rehydration takes under one hour but costs more. You are billed for the minimum storage duration even if you delete the blob early. Moving from a higher tier to a lower tier — such as Hot to Archive — costs nothing. Moving up — such as Archive to Hot — incurs a rehydration read cost.
+
+Lifecycle management policies automatically transition blobs between tiers or delete them based on age or last-access time, eliminating manual intervention. A policy is a J-S-O-N document where you define rules with filters and actions. Filters can match by blob type, name prefix, blob index tags, or blob size. Actions include tier transitions and deletion, applied independently to the base blob, snapshots, and versions. For example, you might move log blobs to Cool after 30 days, to Archive after 90 days, and delete them entirely after 365 days.
+
+Let us now cover security and access control.
+
+There are four ways to authenticate to Blob Storage. Entra I-D combined with Azure R-B-A-C is the recommended approach — it provides fine-grained roles, a full audit trail, and supports Managed Identity for services. User Delegation S-A-S is also recommended — it is a time-limited signed U-R-L based on Entra I-D credentials rather than the account key. Service S-A-S and Account S-A-S are signed with the account key and should be used carefully — if the account key is compromised, all S-A-S tokens signed with it are also compromised. Account Key access should be avoided — treat it like a root password.
+
+The key R-B-A-C roles for Blob Storage are Storage Blob Data Owner for full control, Storage Blob Data Contributor for read, write, and delete, Storage Blob Data Reader for read-only access, and Storage Blob Delegator for creating User Delegation S-A-S tokens.
+
+A S-A-S token is a query string appended to a blob U-R-L that grants time-limited, scoped access without exposing credentials. It includes the expiry time, the scope such as a single blob or container, and the permitted operations such as read or write, along with a cryptographic signature. User Delegation S-A-S signs the token with your Entra I-D credentials — always prefer this over account-key S-A-S.
+
+Stored Access Policies allow you to define reusable S-A-S rules on a container. If you need to revoke access, you update or delete the policy and all S-A-S tokens derived from it are instantly invalidated — without needing to rotate the account key.
+
+For network security, Azure Storage supports firewall rules to restrict access to specific I-P ranges or V-Net subnets, service endpoints to route V-Net traffic over the Azure backbone rather than the public internet, and private endpoints which assign the storage account a private I-P address within your V-Net so no public internet exposure is required.
+
+Now let us look at encryption.
+
+All data in Azure Storage is encrypted at rest by default using 256-bit A-E-S — no configuration is needed. There are three key management options. Microsoft-managed keys are the default and Azure handles automatic rotation. Customer-managed keys, stored in Azure Key Vault, give you control over the rotation schedule, support bring-your-own-key, and provide an audit trail via Key Vault logs. Customer-provided keys are passed with each A-P-I call — Azure never stores them.
+
+For encryption in transit, enable the Secure Transfer Required setting on the storage account to enforce H-T-T-P-S for all requests. H-T-T-P requests are rejected. This is recommended and is the default for new accounts. For compliance scenarios requiring double encryption, you can enable infrastructure encryption which adds a second layer of A-E-S-256 at the storage infrastructure level.
+
+Let us now cover data protection features.
+
+Blob Versioning automatically preserves previous versions of a blob whenever it is overwritten or deleted. Each version has a version I-D and you can access any prior state. Soft Delete retains deleted blobs and containers for a configurable period of 1 to 365 days and allows you to undelete them. The key distinction is that soft delete captures explicit deletions while versioning captures both overwrites and deletions. Point-in-time restore builds on top of these features to let you restore all blobs in a container to a prior timestamp, protecting against bulk accidental changes.
+
+Immutable Storage — also known as W-O-R-M, or Write Once Read Many — prevents any modification or deletion of blobs for a specified period. There are two policy types. Time-based retention policies lock blobs until the retention period expires — once a policy is locked, the retention period cannot be shortened, only extended. This is true even for subscription administrators. Legal hold policies lock blobs until the hold is explicitly removed with no fixed duration. These features satisfy regulatory requirements such as S-E-C 17a-4 for financial records.
+
+Finally, let us briefly look at performance features.
+
+For large blob uploads, the Put Block and Put Block List approach uploads multiple blocks in parallel and then commits them as a single assembled blob. The Python S-D-K handles this automatically. You configure maximum concurrency — the number of parallel block uploads — and the maximum single put size below which a single direct upload is used.
+
+Object replication asynchronously copies blobs from a source container to a destination container, across storage accounts, subscriptions, or even regions. Combined with lifecycle management on the destination, you can build cost-optimised cross-region archive pipelines.
+
+Azure Blob Storage also supports static website hosting — you can serve H-T-M-L, C-S-S, and JavaScript directly from a storage account at a web endpoint. Pair it with Azure C-D-N or Azure Front Door to add a custom domain with H-T-T-P-S, global caching, and a web application firewall, while keeping the storage account itself private.
+
+To summarise. Use Standard G-P-v2 for almost all workloads. Choose Z-R-S for production single-region redundancy and G-Z-R-S for cross-region disaster recovery. Use Block Blobs for files and data lake workloads, Append Blobs for logs. Use lifecycle management policies to automatically tier and delete blobs by age. Authenticate with Entra I-D and Managed Identity for services, or User Delegation S-A-S for time-limited access. Enable soft delete and versioning to protect against accidental deletions. And use immutable storage policies for regulatory compliance.
+
+In the next topic, we will look at Azure Files and Azure Managed Disks — the storage options designed for shared file systems and virtual machine disks.
