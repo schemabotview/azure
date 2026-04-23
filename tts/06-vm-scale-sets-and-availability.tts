@@ -1,0 +1,63 @@
+VM Scale Sets let you deploy and manage a fleet of identical virtual machines that automatically scale in and out based on demand or a schedule. They are the foundation of scalable, highly available compute in Azure — the equivalent of AWS Auto Scaling Groups combined with a launch template. VM Scale Sets integrate with Availability Zones, Azure Load Balancer, and Azure Monitor to create elastic, fault-tolerant compute architectures.
+
+Let us start with the core model.
+
+A VM Scale Set has a defined image, VM size, and instance count. You set a minimum and maximum instance count to bound autoscaling. You choose an orchestration mode, an upgrade policy, a scale-in policy, and a health mechanism for detecting and replacing unhealthy instances. When the scale set is zone-enabled, Azure automatically spreads instances across the selected Availability Zones.
+
+Azure offers two orchestration modes for VM Scale Sets: Flexible and Uniform.
+
+Flexible orchestration is the recommended mode for new workloads. In Flexible mode, each instance is a full Azure virtual machine — it appears individually in the portal and can be managed directly like any other VM. Azure handles placement across Availability Zones and fault domains automatically. You can mix VM sizes, add existing VMs to the scale set, and use any Azure load balancing service. Flexible mode supports up to one thousand instances per scale set.
+
+Uniform orchestration is the older mode. All instances are identical in size and configuration, and they are managed as a group rather than individually. Uniform mode is retained for backwards compatibility and for specific Spot instance mix scenarios. For most new designs, use Flexible.
+
+Now let us do a deeper look at Availability Sets — the availability construct that predates Availability Zones.
+
+An Availability Set groups virtual machines within a single data centre across two dimensions: Fault Domains and Update Domains.
+
+A Fault Domain is a group of hardware that shares a common power supply and network switch — essentially a physical rack. If a rack loses power or its switch fails, all virtual machines on that rack are affected. By spreading your VMs across up to three fault domains, you ensure that a single rack failure takes down at most one-third of your fleet.
+
+An Update Domain is a logical group of VMs that Azure reboots together during planned maintenance — host OS patching or hardware updates. Azure updates only one Update Domain at a time and waits between each. With three VMs each in a separate Update Domain, at most one VM is unavailable during any maintenance window. You can have up to twenty Update Domains per Availability Set.
+
+Availability Sets protect within a single building. They carry a 99.95 percent uptime S-L-A for two or more VMs with Premium S-S-D storage. The main limitation is that they do not protect against an entire data centre failure. For that, you need Availability Zones.
+
+When you configure a VM Scale Set with Availability Zones, Azure spreads instances across all selected zones automatically. For example, with nine instances across three zones, three instances land in each zone. If one zone becomes unavailable, the other two zones continue serving traffic. This is the architecture for 99.99 percent uptime.
+
+VMSS uses best-effort zone balancing by default, which means Azure tries to keep instances evenly distributed but continues scaling out even if one zone is unavailable. If you need strict even distribution — for example, to ensure that your load is always perfectly balanced — you can enable strict zone balancing, which will fail a scale-out operation if it cannot achieve exact distribution.
+
+Now let us look at autoscaling.
+
+Metric-based scaling defines scale-out and scale-in rules driven by Azure Monitor metrics. A common example: if average CPU exceeds seventy percent for five consecutive minutes, add two instances. If average CPU drops below thirty percent for ten minutes, remove one instance. You can scale on CPU, memory, network throughput, custom application metrics from Application Insights, or the length of a Service Bus queue.
+
+Scheduled scaling lets you set minimum, maximum, and default instance counts at specific times. This is useful for predictable patterns — for example, scaling up at eight in the morning on weekdays and scaling back down at eight in the evening.
+
+After any scale-out event, the autoscaler enters a cooldown period — five minutes by default — during which it does not evaluate further scale-out triggers. This prevents rapid back-and-forth scaling, also called thrashing.
+
+When scaling in, Azure must decide which instances to remove. The default scale-in policy first balances across zones, then removes the highest-numbered instance. The Newest VM policy removes the most recently created instances — useful when you want to keep your oldest, most stable VMs. The Oldest VM policy removes the oldest instances — useful for phasing out VMs running an old image version.
+
+When you update the VM Scale Set model — changing the OS image, for example — the upgrade policy controls how that change reaches existing instances.
+
+Automatic upgrade applies the change to all instances immediately in batches, without any coordination. Use this for stateless workloads that tolerate brief disruption.
+
+Rolling upgrade applies changes in configurable batches, pausing between each to verify that the upgraded instances are healthy before continuing. You configure the maximum batch size as a percentage of the fleet, a maximum unhealthy threshold that triggers a pause or abort, and a wait time between batches. Rolling upgrades require a health probe or health extension to be configured — otherwise Azure has no way to determine whether the upgraded instances are working correctly.
+
+Manual upgrade leaves existing instances unchanged until you explicitly trigger an upgrade. Use this for stateful applications or databases where you want full control over when each instance is updated.
+
+Speaking of health — VMSS can automatically detect and replace unhealthy instances. You enable this with either the Application Health Extension, which runs inside the VM and reports health via a local H-T-T-P endpoint, or a load balancer health probe.
+
+When automatic repair is enabled and an instance is unhealthy for longer than the configured grace period — thirty minutes by default — VMSS deletes the unhealthy instance and launches a replacement. The grace period is important because new instances need time to bootstrap and pass their first health check. Setting it too low causes healthy instances to be prematurely deleted.
+
+VMSS also supports Azure Spot V-Ms within the fleet. You can configure the scale set as one hundred percent Spot, or as a mixed fleet that tries Spot first and falls back to regular on-demand instances if Spot capacity is unavailable. This gives you maximum cost savings while still allowing the fleet to grow when Spot is not available.
+
+When a Spot instance is evicted, the eviction policy determines what happens. With the Deallocate policy, the instance is stopped and remains in the scale set — it can restart automatically if Spot capacity becomes available again. With the Delete policy, the instance is removed from the scale set entirely, reducing the instance count.
+
+Finally, let us cover Proximity Placement Groups.
+
+A Proximity Placement Group is an Azure construct that co-locates VMs and VM Scale Set instances in the same physical data centre — minimising network latency between them. The first VM deployed into a Proximity Placement Group anchors the group to a specific host cluster. All subsequent VMs in the group are placed in that same cluster.
+
+This is analogous to a Cluster Placement Group in AWS. Use it for tightly coupled, latency-sensitive workloads like H-P-C clusters, S-A-P systems, or multi-tier applications where the web, application, and cache tiers all need to communicate with sub-millisecond latency.
+
+The trade-off is reduced available hardware capacity — the scale set is constrained to one physical cluster. Do not use Proximity Placement Groups for general workloads where the capacity constraints outweigh the latency benefit.
+
+To summarise the key points. VM Scale Sets manage fleets of VMs that scale automatically. Use Flexible orchestration for new designs. Availability Sets protect within one data centre using Fault Domains and Update Domains, with a 99.95 percent S-L-A. Availability Zones spread across separate buildings for 99.99 percent S-L-A — prefer zones for new designs. Metric-based autoscaling reacts to demand. Scheduled scaling handles predictable patterns. Rolling upgrades roll out image changes safely with health check gates. Automatic repair replaces unhealthy instances. And Proximity Placement Groups minimise latency between co-located workloads.
+
+In the next topic, we will move to Azure App Service and Azure Functions — the platform-as-a-service compute options that remove VM management entirely.

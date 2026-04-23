@@ -1,0 +1,57 @@
+Azure offers two platform-as-a-service compute options that remove virtual machine management entirely. Azure App Service is a fully managed platform for hosting web applications, R-E-S-T A-P-Is, and mobile backends. You bring the code and Azure handles the operating system, patching, scaling, and availability. Azure Functions is serverless, event-driven compute. You write a function, define what triggers it, and Azure runs it automatically, scales it to meet demand, and charges only for the time your code actually executes.
+
+Let us start with App Service.
+
+The foundation of App Service is the App Service Plan. A Plan defines the Azure region, the pricing tier, and the number of underlying VM instances. Multiple App Service apps can share one plan — they all run on the same infrastructure, which makes sharing a plan cost-effective when you have several small apps.
+
+App Service Plans come in several tiers. The Free and Shared tiers run on shared infrastructure with limited CPU minutes per day — useful only for development. The Basic tier gives you dedicated VMs and manual scaling up to three instances, but no autoscaling. The Standard tier adds autoscaling up to ten instances and deployment slots. The Premium V3 tier scales to thirty instances, includes VNet integration, and offers more powerful underlying hardware. The Isolated V2 tier runs inside your own Virtual Network for the highest level of isolation — required for compliance scenarios.
+
+You can make two types of scaling changes to an App Service Plan. Scaling up means moving to a higher tier — bigger VMs with more CPU and RAM. Scaling out means adding more instances of the same tier to handle more concurrent traffic. Scaling out requires Standard tier or above.
+
+The core App Service resource is a Web App. It supports .NET, Node.js, Python, Java, PHP, Ruby, and custom Docker containers. You configure it with App Settings — environment variables injected at runtime — and Connection Strings for database credentials. The Always On setting keeps the application process loaded even when there is no traffic, preventing cold starts. You can attach a custom domain and a T-L-S certificate, with a free managed certificate available directly from Azure.
+
+App Service also has built-in authentication called Easy Auth. With a few clicks in the portal, you can require users to sign in with Entra I-D, Microsoft accounts, Google, GitHub, or any OpenID Connect provider — with no code changes to your application. Azure intercepts unauthenticated requests before they reach your app.
+
+For deploying code, you have several options. GitHub Actions is the most common — Azure can generate a starter workflow automatically when you connect your repository. You can also use Azure DevOps pipelines, ZIP deploy for scripted deployments, local Git push, or container registry webhooks for Docker-based apps.
+
+One of the most powerful App Service features is Deployment Slots.
+
+A deployment slot is a live, fully functional staging environment within the same App Service app. Each slot has its own hostname. You deploy a new version to the staging slot first, test it, and then perform a slot swap — which instantly exchanges the staging and production slots with zero downtime. If something goes wrong, swapping back takes seconds.
+
+By default, all app settings are swapped along with the code. If you have settings that should differ between staging and production — like a production database connection string — mark them as slot settings. Slot settings are sticky — they stay with the slot and are not exchanged during a swap.
+
+Standard plans get five slots. Premium V3 plans get twenty.
+
+For workloads that require complete network isolation — regulated industries like healthcare or payment processing — Azure offers the App Service Environment, or A-S-E. An A-S-E deploys a fully dedicated App Service instance inside your own Virtual Network. Nothing is shared with other customers. The current version, A-S-E V3, runs on the Isolated V2 tier and is significantly faster to provision than earlier versions.
+
+Now let us turn to Azure Functions.
+
+Azure Functions is Azure's serverless compute service — the direct equivalent of AWS Lambda. You write a function, attach a trigger that defines what starts it, and optionally attach bindings that connect it to other services for reading input or writing output. Azure handles all infrastructure, scaling, and availability.
+
+A trigger is what starts a function — every function has exactly one. The most common triggers are H-T-T-P for inbound requests, Timer for scheduled execution using a cron expression, Blob Storage for reacting to files being created or updated, Queue Storage and Service Bus for processing messages, Event Hub for processing event streams, and Cosmos D-B for reacting to database change feed events.
+
+Bindings are declarative connections to other services that you attach without writing boilerplate connection code. An input binding reads data — for example, fetching a document from Cosmos D-B before the function runs. An output binding writes data — for example, pushing a message to a queue or writing a file to Blob Storage when the function completes.
+
+The hosting plan you choose determines scaling behaviour, cold start characteristics, and available features.
+
+The Consumption plan is true serverless. The function app scales to zero when idle and you pay only per execution and duration. Cold starts — the latency of initialising a new function instance after a period of inactivity — can add a few hundred milliseconds to the first request. This plan works best for event-driven, intermittent workloads where occasional cold starts are acceptable.
+
+The Flex Consumption plan is the recommended choice for new serverless workloads. Like the Consumption plan, it scales to zero and charges per execution. But it adds Virtual Network integration, per-function concurrency controls, and faster scale-out. It gives you the cost model of Consumption with the features previously reserved for Premium.
+
+The Premium plan runs pre-warmed instances at all times, completely eliminating cold starts. You pay for the always-on compute even when no functions are running. This is the right choice for latency-sensitive, customer-facing A-P-Is where cold starts are unacceptable. The Premium plan also supports Virtual Network integration and longer execution timeouts.
+
+The Dedicated plan runs functions on an existing App Service Plan — the same V-Ms as a web app. This makes sense if you already have spare capacity in a plan and want to run background functions without paying for additional infrastructure.
+
+Now let us talk about Durable Functions.
+
+Durable Functions is an extension to Azure Functions that lets you write stateful, long-running workflows using ordinary code. Without Durable Functions, standard functions are stateless — each execution is independent and any state must be stored externally. Durable Functions handles checkpointing, retrying, and resuming automatically, so you can write complex multi-step workflows without managing state yourself.
+
+Think of it as the Azure equivalent of AWS Step Functions, but expressed as code rather than a J-S-O-N state machine definition.
+
+A Durable Functions workflow involves three types of functions. The orchestrator function defines the workflow — it calls activity functions and coordinates the flow of execution. Activity functions are the actual units of work — each one does a specific task. The client function, also called the starter, creates a new orchestration instance and can be triggered by H-T-T-P, a queue message, or any other standard trigger.
+
+Durable Functions supports several workflow patterns. Function chaining runs activities sequentially, passing the output of each step as the input to the next. Fan-out and fan-in runs many activities in parallel and then waits for all of them to complete before aggregating the results. The async H-T-T-P A-P-I pattern starts a long operation, returns a status endpoint to the caller, and lets the caller poll until the work is done. The monitoring pattern loops and polls an external condition until it is met. And the human interaction pattern pauses the workflow and waits for an external approval signal — useful for approval workflows where a person must review before the process continues.
+
+To wrap up with a decision guide: use App Service Web Apps for full web applications or R-E-S-T A-P-Is that need persistent processes and deployment slots. Use Azure Functions on the Consumption or Flex Consumption plan for event-driven, short-lived code that runs in response to triggers. Use the Premium plan when cold starts are unacceptable. Use Durable Functions for complex, multi-step workflows. And use the App Service Environment when your compliance requirements demand complete network isolation.
+
+In the next topic, we will look at containers on Azure — Azure Container Instances, Azure Kubernetes Service, and Azure Container Registry.
