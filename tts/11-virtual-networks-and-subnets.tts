@@ -1,0 +1,57 @@
+Azure Virtual Network, or V-Net, is the fundamental building block of private networking in Azure — the Azure equivalent of A-W-S V-P-C. A V-Net is a logically isolated network in the Azure cloud where you deploy and connect Azure resources such as virtual machines, A-K-S clusters, App Service Environments, and private endpoints. A V-Net is scoped to a single Azure region and a single subscription, and V-Nets themselves are free — you pay for gateways, peering traffic, and connected resources, not the V-Net itself. Resources inside a V-Net communicate privately with each other. Traffic between V-Nets, or between a V-Net and on-premises, requires peering, a V-P-N, or ExpressRoute.
+
+Let us start with address space and subnets.
+
+When you create a V-Net you assign one or more C-I-D-R blocks as the address space — the pool of I-P addresses available for all subnets within that V-Net. You use any private R-F-C 1918 range such as 10.0.0.0 slash 16 which gives you 65,536 addresses, or 192.168.0.0 slash 24 for a smaller 256-address block. The key planning rule is to avoid overlap with other V-Nets you plan to peer with and with on-premises networks connected via V-P-N or ExpressRoute, because overlapping address spaces prevent peering and routing.
+
+A subnet is a subdivision of the V-Net address space. Every resource you deploy into a V-Net is placed in a subnet. Subnets must be non-overlapping within the V-Net, and unlike availability zones, a subnet spans all availability zones in the region — it is not zone-scoped. Every subnet loses five I-P addresses to Azure reservations: the network address, the default gateway, two addresses for Azure D-N-S mapping, and the broadcast address. This means a slash 28 subnet with 16 total addresses gives you only 11 usable addresses for your resources.
+
+Some Azure services require a dedicated subnet with a delegation. Delegating a subnet grants the service permission to create its own network policies in that subnet and prevents other resource types from being deployed there. For example, Azure App Service Environment delegates to Microsoft dot Web slash serverFarms, Azure S-Q-L Managed Instance to Microsoft dot Sql slash managedInstances, and Azure Bastion must be placed in a subnet named specifically AzureBastionSubnet.
+
+Now let us look at Network Security Groups.
+
+A Network Security Group, or N-S-G, is a stateful packet filter — a list of inbound and outbound rules that allow or deny traffic to and from Azure resources. An N-S-G can be associated with a subnet so its rules apply to all resources in that subnet, or with a specific network interface so rules apply only to that virtual machine. Both can be applied simultaneously — Azure evaluates the subnet N-S-G first, then the N-I-C N-S-G.
+
+Each rule has five properties: a priority number between 100 and 4096, a source and destination which can be an I-P address, C-I-D-R range, Service Tag, or Application Security Group, a protocol, a port range, and an action of either Allow or Deny. Rules are evaluated in priority order — the lower the number, the higher the priority — and the first matching rule wins.
+
+Azure always adds a set of default rules you cannot delete. On inbound traffic, the defaults allow traffic from within the V-Net and from the Azure Load Balancer, and deny everything else at priority 65500. On outbound traffic, the defaults allow traffic to the V-Net and to the internet, and deny everything else.
+
+Service Tags are named groups of I-P address prefixes managed by Microsoft. They are updated automatically as Azure services add or change their I-P ranges. Use Service Tags in your N-S-G rules instead of hardcoding I-P ranges. For example, the Internet tag represents all public I-P space, VirtualNetwork covers the V-Net address space plus peered V-Nets and on-premises routes, and Storage, Sql, and AzureKeyVault cover the service I-P ranges for those specific Azure services.
+
+Application Security Groups, or A-S-Gs, let you group virtual machines by logical role — for example a group called web-servers and another called db-servers — and then write N-S-G rules that reference the group rather than individual I-P addresses. As you add or remove V-Ms from the group, the rules apply automatically with no I-P management needed.
+
+Now let us look at routing.
+
+Azure automatically creates system routes for every subnet that handle intra-V-Net traffic and default internet egress. You can override system routes using User-Defined Routes, or U-D-Rs. You create a Route Table, add custom routes, and associate it with a subnet. The most common use case is force-tunnelling — adding a zero-slash-zero route with a next hop of Virtual Appliance pointing to an Azure Firewall or Network Virtual Appliance private I-P. This forces all internet-bound traffic from the subnet through the firewall for inspection before it exits. Other uses include routing traffic between subnets through a firewall and overriding routes learned from V-P-N or ExpressRoute gateways.
+
+The next hop types available in a route are Virtual Network for intra-V-Net traffic, Internet for Azure-managed public egress, VirtualAppliance for forwarding to a private I-P such as a firewall, VirtualNetworkGateway for V-P-N or ExpressRoute, and None to drop the traffic entirely as a black hole.
+
+Let us now cover D-N-S in Azure V-Nets.
+
+By default, V-Ms in a V-Net resolve hostnames using Azure-provided D-N-S at the well-known address 168.63.129.16. This handles resolution of Azure resource hostnames within the V-Net and public internet D-N-S. However, it does not support custom domain names.
+
+Azure Private D-N-S Zones provide custom D-N-S resolution within a V-Net without deploying your own D-N-S servers. You create a private zone such as internal dot contoso dot com, add A records pointing to private I-P addresses, and then create a V-Net link to connect the zone to your V-Net. Resources in the linked V-Net can then resolve those names. You can also enable auto-registration so that V-Ms automatically receive an A record when they are deployed into the linked V-Net. Private D-N-S zones are also used by private endpoints — when you create a private endpoint for a storage account, Azure creates a zone such as privatelink dot blob dot core dot windows dot net, and the storage account's F-Q-D-N resolves to the private I-P through that zone.
+
+Now let us look at public I-P addresses and N-A-T Gateway.
+
+Azure has two public I-P S-K-Us. The Standard S-K-U supports only static allocation and includes zone-redundant and zonal options — use it for Load Balancers, Application Gateways, V-P-N Gateways, N-A-T Gateways, and Bastion. The Basic S-K-U is legacy and being retired. Always use Standard for new deployments.
+
+Azure N-A-T Gateway provides outbound-only internet connectivity for an entire subnet without needing a public I-P on each individual V-M. You attach one or more Standard Public I-P addresses or Public I-P Prefixes to the N-A-T Gateway and associate it with a subnet. All outbound traffic from that subnet exits through the N-A-T Gateway's I-P addresses. N-A-T Gateway provides 64,512 S-N-A-T ports per public I-P, which eliminates the port exhaustion issues that can occur with load balancer outbound rules. It is the recommended approach when you need predictable outbound I-P addresses for allowlisting or when running large-scale deployments.
+
+Let us now look at Azure Bastion.
+
+Azure Bastion is a managed service that provides secure R-D-P and S-S-H access to virtual machines directly from the Azure portal, over T-L-S port 443, without exposing the V-Ms to the public internet. You deploy Bastion into a dedicated subnet named AzureBastionSubnet — it must be slash 26 or larger. Bastion requires a Standard Public I-P for its own management plane. Your V-Ms do not need public I-P addresses or N-S-G rules that allow R-D-P on port 3389 or S-S-H on port 22 from the internet.
+
+Bastion comes in three S-K-Us. The Basic S-K-U supports two concurrent sessions. The Standard S-K-U adds support for 50 or more sessions, native client access using your local R-D-P or S-S-H application instead of the browser, and shareable links. The Premium S-K-U adds session recording for audit and compliance purposes.
+
+Now let us compare Service Endpoints and Private Endpoints — two mechanisms for private access to Azure P-a-a-S services.
+
+A Service Endpoint extends the V-Net's identity to a P-a-a-S service. When you enable a service endpoint on a subnet, traffic from that subnet to the service routes over the Azure backbone rather than the public internet, and the P-a-a-S service sees the V-Net private I-P as the source. However the P-a-a-S service still has a public endpoint — you lock it down with a firewall rule that only allows your subnet. The service does not get a private I-P within your V-Net, so it is not accessible from peered V-Nets or from on-premises.
+
+A Private Endpoint creates a network interface with a private I-P address inside your V-Net, mapped to a specific P-a-a-S resource instance. The resource's fully qualified domain name resolves to that private I-P via a private D-N-S zone. Traffic never leaves the Azure backbone. You can disable the public endpoint entirely. Private endpoints are accessible from peered V-Nets and from on-premises networks connected via V-P-N or ExpressRoute. The trade-off is cost — private endpoints charge per hour plus data transfer — whereas service endpoints are free. Private Endpoint is the recommended approach for production workloads. Service Endpoint is a quick, low-cost option when access from peered V-Nets or on-premises is not required.
+
+Finally, V-Net Integration is the outbound counterpart to Private Endpoints. It lets a P-a-a-S service such as App Service or Azure Functions reach resources inside a V-Net over private I-Ps. The App Service is assigned addresses from a designated integration subnet for its outbound calls. V-Net Integration is outbound only — it does not put the App Service inside the V-Net for inbound traffic. For inbound private access to an App Service, you use a Private Endpoint on the App Service itself. To give the App Service a stable outbound I-P, attach a N-A-T Gateway to the integration subnet.
+
+To summarise. A V-Net is your private network in Azure — plan the C-I-D-R carefully to avoid overlaps. Subnets subdivide the V-Net and lose five addresses to Azure reservations. Use N-S-Gs for stateful traffic filtering — attach to subnets for broad coverage and to N-I-Cs for per-V-M rules. Use Service Tags instead of hardcoded I-P ranges. Use U-D-Rs to force-tunnel traffic through a firewall. Use Private D-N-S Zones for custom name resolution and private endpoint D-N-S. Use N-A-T Gateway for predictable, scalable outbound I-Ps. Use Bastion for secure V-M access without exposing R-D-P or S-S-H. And prefer Private Endpoints over Service Endpoints for production P-a-a-S access.
+
+In the next topic, we will look at V-Net Peering, V-P-N Gateway, and ExpressRoute — the options for connecting V-Nets to each other and to on-premises networks.
