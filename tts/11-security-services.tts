@@ -1,0 +1,119 @@
+Identity and governance, from notebook two, give you the who and the what-is-allowed. This notebook is about the rest of the security stack — the services that hold secrets, prove workloads to other services without secrets, watch the platform for misconfiguration, hunt for active attacks, and absorb the volumetric and application-layer assaults that hit any internet-facing system.
+
+The five products to know. Key Vault holds keys, secrets, and certificates. Managed identities make workloads provable without storing credentials. Microsoft Defender for Cloud scores your security posture and protects workloads at runtime. Microsoft Sentinel is the s-i-e-m and s-o-a-r — security information and event management, and security orchestration, automation, and response. And ddos protection plus web application firewalls sit at the network and application edges respectively. Together they turn Azure from a platform you have to bolt security onto into one where security composes with the rest of the stack.
+
+Let's start with Azure Key Vault. Key Vault stores three classes of cryptographic material.
+
+Keys. Asymmetric keys — r-s-a or elliptic curve — or symmetric keys, on managed h-s-m. They are used for encrypt and decrypt, sign and verify, wrap and unwrap operations. Customer-managed-key scenarios — for storage, disk, and sequel encryption — all point at a key in Key Vault.
+
+Secrets. Opaque strings up to twenty-five kilobytes. Connection strings, a-p-i tokens, anything you cannot eliminate with a managed identity.
+
+And certificates. x-five-oh-nine certs with their private key. They auto-renew through integration with public certificate authorities like DigiCert or GlobalSign, or through the App Service managed certificate path.
+
+Two s-k-us of Key Vault itself. Standard or Premium vault is multi-tenant. Software-backed in Standard, h-s-m-backed in Premium. Premium uses fips one forty dash two Level Two validated hardware security modules, shared across tenants.
+
+Managed h-s-m is single-tenant — a dedicated h-s-m cluster, fips one forty dash two Level Three. It is required for regulated workloads that mandate exclusive h-s-m use. It is expensive — billed per hour — so reserve it for genuine compliance need.
+
+Soft delete and purge protection are the lifesaving features. Soft delete retains deleted vaults and objects for seven to ninety days. Purge protection blocks the permanent delete during the retention window. Microsoft now requires both on vaults that back encryption for managed services. Without them, an accidental key-vault-delete command could orphan production data.
+
+The access model. Key Vault supports two modes for granting access. The legacy access policies — a one-to-one principal-to-permissions mapping. And role-based access control, which uses Azure r-bac like the rest of the platform. r-bac is the current recommendation for new vaults. Microsoft is steering everyone off access policies. Roles like Key Vault Secrets User, Key Vault Crypto Officer, and Key Vault Certificates Officer keep the data-plane permissions separated from the management-plane permissions.
+
+Key rotation for keys is automatic when you set a rotation policy on the key. Key Vault generates a new version at the configured interval. Consumers using the versionless u-r-l — the one with no version segment — pick up the new version on the next call. For secrets, rotation requires a custom job — a function or a Logic App — that generates the new value and updates the downstream service.
+
+a-w-s comparison: Key Vault is roughly a-w-s Secrets Manager plus a-w-s k-m-s combined. Managed h-s-m is roughly a-w-s CloudHSM.
+
+Now, managed identities — secret-less authentication. Notebook two introduced managed identities in the context of identity. They earn a deeper look here, because getting them right is the single highest-leverage move on credential hygiene.
+
+The two flavours, briefly. System-assigned managed identity is created with the resource and tied to its lifecycle — one-to-one. User-assigned managed identity is a standalone resource, attachable to many resources, and outlives any one of them.
+
+How code uses them. The Azure software development kit has a Default Azure Credential class that walks an ordered chain of authentication sources — environment credential first, then workload identity credential, then managed identity credential, then Azure command line credential, and so on. On an Azure virtual machine with a managed identity attached, the s-d-k calls the instance metadata service — the one-six-nine-dot-two-five-four-dot-one-six-nine-dot-two-five-four endpoint — to get a token. Your code never sees a secret.
+
+Three practical patterns.
+
+A virtual machine, App Service, Function, Container App, or Azure Kubernetes Service pod wants to read a secret from Key Vault. Attach a managed identity, grant it Key Vault Secrets User, fetch secrets with the s-d-k.
+
+An Azure Kubernetes Service workload authenticates to a database. Use Azure a-d Workload Identity — federation between Kubernetes service accounts and Entra i-d app registrations. No service-principal secrets in the cluster.
+
+GitHub Actions, GitLab, or another external continuous integration system deploys to Azure. Use a federated credential on an Entra i-d app registration. The pipeline's open-i-d-connect token is exchanged for an Entra i-d token. No client secret in GitHub.
+
+The end state worth aiming for: zero secrets in pipelines, in source control, or in application configuration. Everything that needs an Azure call uses an identity. Key Vault stores only the credentials that absolutely cannot be eliminated — third-party a-p-i keys, legacy stuff.
+
+Let's move to Microsoft Defender for Cloud. Defender for Cloud is two products in one wrapper.
+
+The first is cloud security posture management — c-s-p-m. The free baseline continuously assesses your Azure resources against the Microsoft Cloud Security Benchmark and produces a secure score. Findings are concrete: this virtual machine has no endpoint protection. This storage account allows public blob access. This sequel server is missing an audit policy. Each finding comes with remediation steps. The free tier covers Azure. The paid Defender c-s-p-m extends to a-w-s, g-c-p, and on-premises through Azure Arc.
+
+The second is workload protection plans. These are pay-per-resource agents that detect threats at runtime.
+
+Defender for Servers, in p-one or p-two tiers, gives you endpoint detection and response through Microsoft Defender for Endpoint, file integrity monitoring, and just-in-time virtual machine access.
+
+Defender for Containers gives you image scanning in Azure Container Registry, runtime detection on Azure Kubernetes Service, and Kubernetes admission policies.
+
+Defender for Storage gives you malware scanning on blob upload, and anomalous access detection.
+
+Defender for sequel gives you vulnerability assessment, and anomalous-query detection.
+
+There are also Defender for Key Vault, Defender for App Service, Defender for Cosmos d-b, and similar plans for other services.
+
+The regulatory compliance dashboard maps your resources against i-s-o twenty-seven-thousand-one, p-c-i d-s-s, n-i-s-t eight hundred fifty-three, h-i-p-a-a h-i-trust, and other standards. That is useful when an auditor asks where you are on compliance.
+
+Defender for Cloud is where security finds out what is wrong. Sentinel is where security responds. The two integrate — Defender for Cloud alerts flow into Sentinel as incidents.
+
+a-w-s comparison: Defender for Cloud is roughly Security Hub plus GuardDuty plus Inspector plus Macie plus Trusted Advisor, combined into one console.
+
+Now, Microsoft Sentinel. Sentinel is the cloud-native s-i-e-m and s-o-a-r. It runs on a Log Analytics workspace, and it is priced per gigabyte ingested.
+
+Four layers.
+
+Data connectors. About a hundred and fifty built-in connectors pull logs from Azure — Activity Log, Defender for Cloud, Entra i-d sign-ins, Storage, Key Vault — from other clouds — a-w-s CloudTrail, g-c-p — from Microsoft three sixty five — Defender x-d-r, Office — and from third-party systems — Palo Alto, Cisco, Okta, syslog, c-e-f.
+
+Analytics rules. These are k-q-l queries that run on a schedule — for example, every five minutes — and create incidents when they match. Microsoft ships hundreds of rule templates. You customise to your environment.
+
+Incidents. The analyst workflow. Triage, assign, investigate, close. Entities — users, i-p addresses, hosts — link to related events automatically.
+
+Playbooks. Logic Apps that automate the response — disable a user, isolate a host through Defender, post to Teams, open a ServiceNow ticket. Trigger them automatically from rules, or manually from incidents.
+
+There are also higher-level features. u-e-b-a — user and entity behavior analytics — baselines normal behaviour and flags deviations. Threat intelligence ingests indicators of compromise you upload or buy. And notebooks — Jupyter, with built-in connectors to the workspace — for ad-hoc hunting.
+
+Sentinel is the right call when you have several Azure subscriptions, or multi-cloud, or a security operations centre. For a single small subscription, Defender for Cloud's alerts may be enough on their own.
+
+a-w-s comparison: Sentinel is roughly Security Hub plus Detective plus EventBridge plus Athena queries, with the s-i-e-m and s-o-a-r experience genuinely more mature than the a-w-s equivalents.
+
+Next, ddos protection. Every Azure region has ddos Protection Basic built in, for free. It absorbs the volumetric noise that hits the platform fabric. You do not see it. It just works.
+
+ddos Protection Standard, also marketed as ddos i-p Protection in one of its forms, is the paid tier. It adds adaptive tuning of mitigation policies per public i-p, based on traffic baselining. Attack analytics — flow logs, mitigation reports, post-attack analysis. Cost protection — Microsoft credits the egress and scale-out costs incurred during an attack. And twenty-four-seven access to the ddos rapid response team during an active attack.
+
+Two s-k-us in the Standard family. ddos Network Protection covers all public i-p addresses in a virtual network under one plan, for a flat fee. ddos i-p Protection is pay-per-public-i-p, useful when you have a handful of high-value endpoints and do not need network-wide coverage.
+
+Anything internet-facing in production — Application Gateway, Front Door, load balancer with a public i-p — should be covered. Front Door has its own ddos protection at the edge as part of the service, which is why Front Door plus ddos Standard on the regional public i-p addresses is a common stacked posture.
+
+a-w-s comparison: Basic is roughly a-w-s Shield Standard. Standard is roughly a-w-s Shield Advanced.
+
+Now, web application firewalls — the positioning. Azure offers w-a-f on two products, and the choice is about where the w-a-f runs.
+
+w-a-f on Application Gateway runs in your region and integrates with Application Gateway listeners. Use it when traffic is regional, or when you want w-a-f rules that can reference internal backend behaviour.
+
+w-a-f on Azure Front Door Premium runs at the edge, in over a hundred points of presence. It stops attacks before they ever reach your region. It is the default for internet-facing global applications.
+
+Both share the same rule-set technology. Microsoft Default Rule Set is the production default. Bot Manager rules cover known bots. And the owasp Core Rule Set is available when you need standards alignment. Custom rules let you add your own logic — i-p allow-lists, geo blocks, rate limits.
+
+Two modes per policy. Detection logs only. Prevention blocks matching requests. Deploy in Detection first, watch the false-positive rate, then flip to Prevention. The temptation to deploy straight to Prevention is what gets the security team called in on the first weekend.
+
+Stacking Front Door w-a-f and Application Gateway w-a-f is common. Front Door blocks the broad volumetric and owasp-class attacks at the edge. Application Gateway adds region-level rules that may reference backend behaviour. Each catches what the other cannot.
+
+a-w-s comparison: w-a-f on Application Gateway or Front Door is roughly a-w-s w-a-f on an Application Load Balancer or CloudFront. The model is essentially the same.
+
+That brings us to the close. The security stack for a production workload, top down.
+
+Identity. Entra i-d with conditional access. Admin roles through Privileged Identity Management. Managed identities everywhere code calls Azure. The full identity story lives in notebook two.
+
+Secrets. Key Vault, in r-bac mode, with soft delete and purge protection on, for the residual secrets that managed identities cannot eliminate. Auto-rotation policies on keys. Rotation jobs for secrets.
+
+Workload protection. Defender for Servers, Containers, sequel, Storage, and Key Vault enabled on the resource types that hold customer data or face the internet.
+
+Posture. Defender for Cloud's secure score reviewed weekly. The regulatory compliance dashboard mapped to the standards the organisation cares about.
+
+Detect and respond. A Sentinel workspace ingesting Activity Log, Defender alerts, Entra i-d sign-ins, and any third-party feeds. Analytics rules tuned to the environment. High-severity playbooks automated — disable user, isolate host, open ticket.
+
+Edge. Front Door Premium w-a-f in Prevention mode. ddos Network Protection on the regional virtual network. Application Gateway w-a-f stacked for region-level rules.
+
+Get those six right, and most of the breach surface area is closed off. The surface area that remains is monitored, alerted on, and procedurally answered. Security in the cloud is not magic. It is the discipline of composing these primitives so that the easy thing and the secure thing are the same thing. Observability and governance come next.

@@ -1,0 +1,147 @@
+Once you have services running and a network they can sit in, the next problem is getting requests to them — fairly, fast, and ideally inspected for malice on the way. Azure has four distinct products that do this, layered from the closest-in to the farthest-out. Azure Load Balancer. Application Gateway. Azure Front Door. And Traffic Manager. Each one occupies a different layer of the stack, and choosing the right one — or the right combination — is one of the most common architectural questions you will face.
+
+Underneath all four sits Azure d-n-s, the resolution layer that ties hostnames to the rest, including the private endpoints that take traffic off the public internet entirely.
+
+Let's start with Azure Load Balancer. Azure Load Balancer is the layer-four — t-c-p and u-d-p — regional load balancer. It distributes inbound flows across a backend pool based on a hashed five-tuple. There is no application-layer awareness. Just very fast packet steering.
+
+Two s-k-us, and the choice is permanent. Basic is free, has limited backends, no zone redundancy, and no service-level agreement. Microsoft is retiring it in September twenty twenty-five. Do not start anything new on it. Standard is production-grade. It is zone-redundant or zonal, has much higher backend limits, is secure by default — meaning deny-all unless an explicit rule allows — supports h-a Ports, and integrates with Standard public i-p addresses.
+
+Two configurations. Public, where the front-end has a public i-p, for inbound traffic from the internet to backend virtual machines or scale sets. And internal — often called an internal load balancer, or i-l-b — where the front-end has a private i-p in a virtual network subnet. Internal load balancers load-balance traffic between tiers without exposing them.
+
+Three concepts run the whole thing.
+
+A front-end i-p configuration. Public or private i-p addresses that listeners attach to.
+
+A backend pool. A set of network interface cards, i-p addresses, or virtual machine scale set instances that receive traffic.
+
+And load-balancing rules. A rule maps a front-end port to a backend port, with a health probe and a session-persistence mode — none, client i-p, or client i-p plus protocol.
+
+Health probes are t-c-p, h-t-t-p, or h-t-t-p-s probes that mark backends in or out. Backends that fail the probe stop receiving traffic. This is the only mechanism by which the load balancer learns a backend is unhealthy.
+
+The most common health-probe mistake is probing the wrong thing. A naive probe hits the root path of a web server and considers the backend healthy if the t-c-p connection succeeds. The trouble is that the web server can be up while the database it depends on is down. Real users get five-hundred errors, but the probe sees a two-hundred and keeps sending traffic. The fix is a custom health endpoint — slash health, slash ready, or whatever name you pick — that exercises the actual dependencies the application needs and returns two-hundred only when all of them work. The probe checks that endpoint. The discipline of writing a real health endpoint is one of the highest-return investments in load-balanced architectures, and most teams skip it until they have been bitten.
+
+h-a Ports is a Standard-only mode in which the rule covers all ports and all protocols on the front-end. It is useful for clustering a network virtual appliance behind a load balancer.
+
+a-w-s comparison: Azure Load Balancer is roughly the a-w-s Network Load Balancer — the n-l-b. The layer-four mental model and the role in an architecture are virtually identical.
+
+Now, Application Gateway. Application Gateway is the regional layer-seven load balancer. It terminates t-l-s, inspects h-t-t-p, and routes based on u-r-l path, host header, or query string. It also hosts the web application firewall — w-a-f v-two — that protects backends from owasp top ten attacks.
+
+Today only the v-two s-k-u is current. v-one is retired in April twenty twenty-six. The features that matter.
+
+Listeners. What to listen on — port plus protocol plus an optional host header. One per public-facing site or path tree.
+
+Rules. A rule binds a listener to a backend pool, with optional path-based routing, u-r-l rewrites, or redirects.
+
+Backend pools. Network interface cards, i-p addresses, fully qualified domain names — you can point at an App Service or a virtual machine scale set — or network interface cards from a Private Link.
+
+Health probes. h-t-t-p or h-t-t-p-s, customisable per pool.
+
+t-l-s termination and end-to-end t-l-s. The gateway holds the public certificate. You can re-encrypt to backends with a separate certificate.
+
+w-a-f policies. Managed rule sets — the Microsoft Default Rule Set, the o-w-a-s-p core rule set — bot manager rules, and custom rules. You attach a policy to a listener or to specific paths.
+
+Autoscale. Set a minimum and maximum instance count, and the v-two scales automatically with traffic.
+
+Zone redundancy. Spread instances across availability zones — the default for production deployments.
+
+There is also the Application Gateway Ingress Controller, often shortened to a-g-i-c, which makes the gateway act as a Kubernetes ingress for an Azure Kubernetes Service cluster.
+
+a-w-s comparison: Application Gateway is roughly an Application Load Balancer plus a-w-s w-a-f, combined into one product. Two services on a-w-s; one on Azure.
+
+A word on t-l-s termination. By default, the gateway holds the public certificate, terminates t-l-s at the gateway, and then forwards the request to the backend over plain h-t-t-p inside the virtual network. That is fine for many workloads, but for regulated environments where transport encryption is required end to end, you configure end-to-end t-l-s. The gateway terminates the client-side t-l-s, inspects the request, and then re-encrypts with a separate certificate for the backend. The backend presents its own certificate, and the gateway validates that cert against an allow-list of root authorities you have uploaded. The performance cost is small. The compliance benefit is large. For workloads holding personal or financial data, end-to-end t-l-s is the right default.
+
+Another feature worth highlighting is u-r-l rewrites. The gateway can rewrite the path, query string, or response headers as traffic passes through. This is how you stitch together a single public site name in front of multiple backends — slash a-p-i routes to one backend pool, slash a-d-m-i-n to another, and slash images is served from a storage account. From the client's perspective, the site is one application. From inside, it is a fleet of services behind one consistent surface.
+
+Now, Azure Front Door. Azure Front Door is the global edge. Anycast i-p addresses in over a hundred Microsoft points of presence worldwide, terminating t-l-s, running a w-a-f, caching static content, and routing requests to your nearest healthy origin.
+
+The model is similar to Application Gateway but operates globally rather than regionally.
+
+Origins are your actual backends — App Services, Storage accounts, Application Gateways, public i-p addresses. They are grouped into origin groups with a load-balancing configuration.
+
+Endpoints are the customer-facing host names — either an azurefd dot net hostname or your own domain.
+
+Routes match patterns — path plus host — and forward to an origin group, with optional caching and rules-engine transformations.
+
+The w-a-f policy uses the same owasp core rule set as Application Gateway, but enforced at the edge before requests reach your region.
+
+Caching is t-t-l-aware at every point of presence. There is compression, query-string handling, and vary-by header support.
+
+Private Link integration in the Premium tier can reach private origins through Private Link, so the origin itself can have no public i-p at all.
+
+Two s-k-us. Standard, with basic c-d-n and w-a-f. Premium, with managed w-a-f rules, bot protection, and Private Link to origins. Premium is the production default for anything internet-facing.
+
+a-w-s comparison: Front Door is roughly CloudFront plus a-w-s w-a-f plus Global Accelerator, merged into one product. The anycast i-p addresses and the edge point-of-presence topology look like CloudFront. The rule engine and w-a-f feel like the a-w-s w-a-f and CloudFront combination, but wired together for you.
+
+To make the edge value concrete, imagine you are running a global e-commerce site with origins in two regions, east-u-s and west-europe. A customer in Mumbai opens the homepage. Without Front Door, the request crosses the public internet from Mumbai to whichever origin region you happened to put first in d-n-s — that might be many tens of milliseconds away over congested links. With Front Door, the request goes to a Microsoft point of presence inside India, which terminates t-l-s locally, checks the w-a-f rules, and forwards over Microsoft's private backbone to the nearest healthy origin region. The customer sees noticeably faster page loads, and cacheable assets like product images come out of the local edge without hitting the origin at all. That last part — caching at the edge — is often the single biggest performance and cost lever for a global site. Origin egress drops dramatically when the c-d-n is taking the heavy traffic.
+
+Let's move to Traffic Manager. Traffic Manager is d-n-s-based global routing. It does not carry traffic. It resolves your hostname to one of several endpoint i-p addresses based on a routing method. The client then connects directly to the resolved i-p.
+
+The routing methods.
+
+Priority. Primary endpoint preferred. Failover to secondary if primary is unhealthy. This is classic active-passive.
+
+Weighted. Distribute by weight — sixty-forty, for example, or any other split.
+
+Performance. Return the endpoint with the lowest network latency to the resolver.
+
+Geographic. Return based on the resolver's country or region.
+
+Multi-value. Return up to n healthy endpoints.
+
+Subnet. Match the resolver's subnet to a configured endpoint.
+
+Because Traffic Manager works at the d-n-s layer, failover speed is bounded by t-t-l — typically sixty seconds before clients learn about a swap. That is slow compared to Front Door's anycast-driven instant rerouting. Traffic Manager is the right choice for non-h-t-t-p workloads — anything beyond h-t-t-p and h-t-t-p-s — or for endpoints that are not Azure-resident. You can point Traffic Manager at a-w-s i-p addresses or on-premises i-p addresses.
+
+a-w-s comparison: Traffic Manager is roughly Route fifty-three routing policies. The mental model is the same — d-n-s as the routing primitive.
+
+The sixty-second t-t-l matters more than it sounds. When a region fails, Traffic Manager detects it through its own health checks and updates its responses. But existing clients keep using the old i-p until their cached d-n-s response expires. For a Friday-evening outage of a heavily-used a-p-i, that means roughly a minute of failed traffic for cached resolvers, plus the time clients take to reconnect and retry. For a workflow where seconds matter — payment processing, real-time bidding — that minute is too long, and Front Door's anycast model is the right answer. For workflows where a minute of cached failure is acceptable — internal admin tools, batch a-p-is, non-critical h-t-t-p endpoints — Traffic Manager is dramatically cheaper and simpler.
+
+A short note on Azure c-d-n. Historically, Azure c-d-n was a separate product with three providers — Microsoft, Verizon, and Akamai. The Verizon and Akamai c-d-n profiles are retired. The remaining Microsoft profile is being superseded by Azure Front Door Standard and Premium, which absorbed the c-d-n feature set.
+
+If you see Azure c-d-n in older docs or in an existing tenant, treat it as a deprecated path. New deployments should use Front Door, which gives you c-d-n, w-a-f, anycast routing, and rules engine, in one product.
+
+a-w-s comparison: there is no longer a standalone c-d-n on Azure to compare to CloudFront. Front Door is the c-d-n now.
+
+Let's pull this together. Choosing the right traffic service. The four products overlap enough to confuse, and they compose enough to coexist. Here is the decision tree as a flow you can walk in your head.
+
+Is traffic h-t-t-p or h-t-t-p-s? If no, choose Traffic Manager for d-n-s-based global routing, or Azure Load Balancer if the traffic stays inside a virtual network.
+
+If yes, is the workload global and internet-facing? If yes, choose Azure Front Door at the edge — w-a-f, caching, and global routing all built in.
+
+If h-t-t-p and regional or internal, ask: do you need w-a-f, path-routing, or t-l-s termination? If yes, choose Application Gateway as the regional layer-seven product. If no, choose Azure Load Balancer at layer four, or rely on the load balancer that App Service has built in.
+
+The most common production stack for an internet-facing app is layered. Front Door at the edge. Application Gateway, or App Service, regionally. Internal Load Balancer between tiers. Front Door handles w-a-f, caching, and global routing. Application Gateway handles regional path routing and a second line of w-a-f. The internal Load Balancer balances private traffic between tiers. The three layers do not fight. They each solve a different problem at a different scope.
+
+Note that Front Door plus Application Gateway, with w-a-f enabled on both, is a common pattern. Front Door catches the broad volumetric and owasp attacks at the edge. The gateway w-a-f runs region-level rules that can include backend-specific logic.
+
+Now, Azure d-n-s. Azure d-n-s hosts authoritative d-n-s zones — both public, delegated from dot-com or dot-i-o, and private, resolvable only inside linked virtual networks.
+
+Three record types worth knowing beyond the obvious a, quadruple-a, c-name, and t-x-t.
+
+Alias records are special a or quadruple-a records that point directly at an Azure resource — a public i-p, a Front Door, a Traffic Manager, an App Service, a c-d-n profile. The d-n-s answer follows the underlying resource's i-p automatically — no t-t-l gotchas when the resource scales or moves.
+
+Apex records. The zone apex — for example, contoso dot com without a host prefix — cannot hold a c-name by r-f-c. Alias records solve this. You can point contoso dot com at a Traffic Manager or Front Door without manual a-record management.
+
+Auto-registration. For private zones, virtual-network-attached resources can self-register their hostnames. Virtual machines in v-net-app resolve each other by name without anyone editing the zone.
+
+Private d-n-s zones are the unsung hero of private-endpoint deployments. Every Azure platform-as-a-service that supports Private Link has a corresponding privatelink dot service dot core dot windows dot net zone, which you link to your virtual networks so clients resolve to the private i-p.
+
+Azure Private d-n-s Resolver is a managed forwarder you put in the hub virtual network for cross-virtual-network, hybrid, or split-horizon resolution. Before it existed, the standard pattern was a Linux virtual machine running b-i-n-d in the hub. Private d-n-s Resolver replaces that virtual machine with a managed service. For new builds, use Private d-n-s Resolver from day one.
+
+Split-horizon d-n-s deserves a paragraph of its own, because it is the configuration that confuses the most teams. The setup is this. The same hostname — say, api dot contoso dot com — should resolve to a public i-p when looked up from the internet, and to a private i-p when looked up from inside your virtual network. The public answer points at Front Door or a public Application Gateway. The private answer points at a Private Link endpoint inside your virtual network. You achieve this with two zones: a public Azure d-n-s zone holds the public record, and a private d-n-s zone with the same domain name holds the private record. Virtual machines inside the linked virtual networks consult the private zone first and get the private answer. Clients on the internet hit the public zone and get the public answer. Same hostname, two answers, no application changes required. That is the kind of clean primitive Azure d-n-s gives you, and it is what makes secure-by-default private architectures practical.
+
+That brings us to the close. A typical internet-facing production stack, end to end, looks like this.
+
+You have a custom domain, like app dot contoso dot com, registered with your registrar and delegated to Azure d-n-s.
+
+An alias record in Azure d-n-s points the apex at the Azure Front Door endpoint.
+
+Front Door Premium handles t-l-s, the web application firewall — running the Microsoft Default Rule Set — caching, and origin selection. It routes traffic to an Application Gateway in the primary region, and an origin group fails over to a secondary-region Application Gateway if the primary is unhealthy.
+
+The Application Gateway w-a-f in each region terminates the internal t-l-s, runs region-level web application firewall rules and path-based routing, and sends requests into the backend pool.
+
+The backend pool points at an App Service, or at an Azure Kubernetes Service cluster through the ingress controller, or at a virtual machine scale set. Internal load balancers sit between private tiers — cache, database, internal a-p-i.
+
+And private d-n-s zones linked to the virtual networks resolve private endpoints for storage, sequel, Key Vault, and anything else the workload depends on.
+
+That shape covers the four traffic products plus d-n-s and answers the design question in one go. Smaller workloads peel layers off as needed. A single-region app might run with Application Gateway and App Service alone — no Front Door. An internal-only a-p-i might be just an internal load balancer or a private App Service. But the layered model is what scales when the requirements scale, and recognising which layer a service belongs to is half of getting traffic architecture right. Relational databases and caching come next.

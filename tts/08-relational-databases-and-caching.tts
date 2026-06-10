@@ -1,0 +1,123 @@
+Azure offers three deployment shapes for sequel server, two flexible-server platform-as-a-service engines for PostgreSQL and MySQL, and a managed Redis as the canonical cache. They sit on a continuum from fully managed platform-as-a-service with sharp limits, all the way to a raw virtual machine you operate yourself. The decision among them is the most consequential one in any database-backed workload.
+
+The shape to hold in your head. Azure sequel database is the cloud-native platform-as-a-service. Narrow surface, deepest automation, best for greenfield. Azure sequel managed instance is the lift-and-shift bridge — almost full sequel server compatibility on managed infrastructure. sequel server on a virtual machine is full control and full operations. The open-source flexible servers cover PostgreSQL and MySQL in the same platform-as-a-service spirit. And Azure Cache for Redis is the data-layer accelerator that takes load off all of the above.
+
+Let's start with Azure sequel database — the cloud-native platform-as-a-service. Azure sequel database runs a single logical database on a multi-tenant sequel server fleet that Microsoft fully manages. You write t-sequel. Microsoft handles backups, patching, high availability, and zone redundancy.
+
+There are two purchase models you pick between, and you can switch later. The v-core-based model exposes explicit c-p-u, memory, input-output, and storage knobs. It maps to hardware shapes — Standard-series, memory-optimised, Hyperscale. It is the cleaner mental model and it supports Azure Hybrid Benefit and Reserved Capacity discounts.
+
+The d-t-u-based model is the older alternative. d-t-u stands for database transaction unit. It bundles c-p-u, input-output, and memory into one opaque number. Simpler, but harder to reason about. Microsoft is steering everyone toward v-core.
+
+Three service tiers exist in the v-core model.
+
+General Purpose has separated compute and storage with standard latency. It is the default.
+
+Business Critical uses local s-s-d, has Always On availability group replicas inside the service-level agreement, and gives you the lowest latency. Use it for online transaction processing that cannot wait on remote storage.
+
+Hyperscale is a log-streaming architecture that scales storage to a hundred terabytes and supports many readable replicas with near-instant restore from snapshots. It is the right choice when you outgrow normal sequel database, or when you need fast point-in-time restore on huge databases.
+
+Serverless is a billing flag on the General Purpose tier. It auto-pauses when idle and autoscales compute between a minimum and maximum number of v-cores. You pay per v-core-second when active, and you pay nothing for compute during pause — only for storage. Use it for development, test, intermittent applications, and per-tenant databases that do not always run.
+
+Elastic pools group many databases into a shared resource budget. When one database is busy, it uses the headroom others are not using. You pay one pool bill and get n databases. Elastic pools are the right fit for software-as-a-service applications where each customer gets a database, but no individual customer is hot all the time.
+
+A concrete example brings elastic pools alive. Imagine you are running a software-as-a-service product with five hundred customers, and each customer has their own logical database. If you provisioned each database with two v-cores of guaranteed compute, you would pay for a thousand v-cores constantly — even though at any moment, maybe twenty of those customers are actually active. With an elastic pool sized at, say, one hundred v-cores, the active customers spread across the pool's compute. The quiet customers cost essentially nothing in compute. You serve the same workload at a tenth of the price, and customers do not notice because the active ones are getting the headroom they need. The pool model is one of the strongest cost arguments for the Azure sequel database side of the platform.
+
+Now, high availability, geo-replication, and failover groups. Inside a region, every Azure sequel database tier gives you a high-availability service-level agreement. General Purpose uses zone-redundant storage. Business Critical and Hyperscale ship readable replicas across availability zones inside the tier.
+
+Across regions, two features stack. Active geo-replication gives you up to four secondary databases in other regions, kept current through asynchronous log shipping. Secondaries are readable. You initiate the failover.
+
+Auto-failover groups are a managed wrapper on top of geo-replication. They add a read-write listener and a read-only listener — single host names whose d-n-s answer follows the failover — and an automatic failover policy. The application connects to the listener rather than to a region-specific endpoint. When the primary region fails, the listener flips, and clients reconnect to the new primary without any application change.
+
+Failover is not free of data loss. The replication is asynchronous. The recovery-point objective is typically seconds, but it can be longer under load. For workloads that need zero data loss on regional failure, you have to use a synchronous pattern at the application layer, or accept the trade.
+
+a-w-s comparison. Azure sequel database General Purpose is roughly r-d-s for sequel server with multi-availability-zone deployment. Hyperscale is roughly Aurora's architecture — compute plus log plus page servers. Auto-failover groups are roughly r-d-s multi-region failover with the listener built in.
+
+A word on Hyperscale, because it is one of the more interesting recent architectures. Classic database engines write to a single set of data files, and growing past a few terabytes gets painful. Hyperscale separates the engine into compute nodes, log servers, and page servers — three independently scaled layers. Compute talks to log servers for durability and to page servers for storage. Storage scales transparently into the hundreds of terabytes because page servers can be added without disturbing the engine. Readable replicas attach by reading from log servers directly, so adding replicas does not affect primary throughput. Point-in-time restore on a multi-terabyte Hyperscale database happens in minutes instead of hours, because the engine can spin up against existing storage rather than copying it. If your workload outgrows General Purpose or Business Critical, Hyperscale is the architecture to graduate to.
+
+Next, Azure sequel managed instance. Managed instance is the answer to: we have a sequel server today, and we want a platform-as-a-service, but our applications use cross-database queries, sequel agent jobs, c-l-r, Service Broker, or linked servers, and we cannot rewrite them.
+
+Managed instance gives you the full sequel server instance surface — multiple databases under one logical instance, sequel agent, cross-database queries, Service Broker, Database Mail — running on managed infrastructure inside a virtual network subnet you choose. Backups, patching, and high availability are Microsoft's job. Instance-level features behave like classic sequel server.
+
+Two tiers. General Purpose uses remote storage, has a lower input-output ceiling, and is the cheaper default. Business Critical has local s-s-d and availability-group replicas, with online-transaction-processing-grade latency and in-memory online transaction processing support.
+
+The trade-offs versus Azure sequel database are: longer provision and scale times, no Hyperscale tier yet, and a per-instance pricing model that is cheaper at scale — many databases per instance — but pricier for one small database.
+
+The trade-offs versus sequel on a virtual machine are: you give up sysadmin access, but you get back patching and high availability.
+
+When to pick managed instance: when you are migrating an existing sequel server estate, and rewriting away from instance-level features is more expensive than paying for managed instance.
+
+Now, sequel server on a virtual machine. This is the infrastructure-as-a-service option. You install sequel server on a Windows or Linux virtual machine — or more often, you deploy from a marketplace image that pre-installs it — attach Premium s-s-d v-two disks, and you have a sequel server you fully control.
+
+Reach for sequel on a virtual machine when you need a feature managed instance does not yet support. Distributed transactions across heterogeneous boxes. Certain c-l-r scenarios. Very specific version requirements. Reach for it when an i-s-v product demands sysadmin access. And reach for it when the licensing economics — Azure Hybrid Benefit on Windows plus sequel — work out cheaper than managed instance.
+
+Avoid sequel on a virtual machine when managed instance or Azure sequel database fits. Every day of sysadmin work you sign up for is a day you do not get back.
+
+a-w-s comparison. sequel on a virtual machine is roughly self-managed sequel server on e-c-two. Managed instance is roughly r-d-s Custom for sequel server — the closest analogue, with caveats. Azure sequel database is roughly regular r-d-s sequel server, or Aurora-style at the Hyperscale tier.
+
+Let's move to open-source databases. For PostgreSQL and MySQL, Azure's current direction is Flexible Server for both. The older Single Server offerings are deprecated.
+
+Flexible Server gives you a familiar list of platform-as-a-service features. Burstable, General Purpose, and Memory Optimised compute tiers — the standard Azure tier shape. Zone-redundant high availability, with a synchronous standby in a different availability zone and automatic failover. The standby is optional and costs a second instance.
+
+Read replicas, in the same or other regions, asynchronous, up to five. Use them for read scaling and for disaster recovery.
+
+Virtual network integration. The server gets a private i-p in a delegated subnet. No public endpoint is required.
+
+Maintenance window controls. You pick when patches roll, not Microsoft.
+
+There are also engine-specific features. On PostgreSQL: extensions like p-g stat statements, pgvector for vector search, and postgis for geospatial data. Logical replication. In-place major-version upgrades.
+
+On MySQL: versions five point seven and eight point zero. Data-in replication for migration. g-t-i-d-based replication.
+
+There is also Cosmos d-b for PostgreSQL, formerly called Hyperscale Citus. It is the distributed-PostgreSQL offering for sharded workloads. We cover it in the next notebook with the other no-sequel and analytics services, because of its multi-node architecture.
+
+a-w-s comparison. Flexible Server is roughly r-d-s for PostgreSQL or MySQL with multi-availability-zone. Cosmos d-b for PostgreSQL is roughly Aurora PostgreSQL when sharded with Citus.
+
+Now, Azure Cache for Redis. Azure Cache for Redis is managed Redis. Microsoft runs the nodes, patches them, and fails them over. You point your application at a host name and a key.
+
+Four tiers, with very different operational profiles.
+
+Basic is single-node and has no service-level agreement. Use it for development and test only.
+
+Standard has a primary plus a replica, with a two-node service-level agreement. It is production-ready for small caches.
+
+Premium adds clustering — sharding the keyspace across nodes — virtual network injection, Redis persistence with r-d-b and a-o-f snapshots, and zone redundancy. Premium is the classic production tier.
+
+Enterprise and Enterprise Flash are built on Redis-the-company's software. They support Redis modules like Search, j-s-o-n, and Bloom; active-active geo-replication; and a five-nines service-level agreement. Use Enterprise for the highest-scale or multi-region workloads.
+
+Two features that bend the design.
+
+Clustering. Premium and Enterprise shard the keyspace across nodes, and clients must use the cluster-aware Redis driver. Throughput scales with node count. You give up multi-key transactions across slots — that is, two keys that live on different shards cannot be modified atomically.
+
+Geo-replication. Premium offers asynchronous, manual-failover geo-replication. Enterprise offers active-active — multi-primary replication. Active-active is what gets you concurrent writes from multiple regions, with the caveat that conflict resolution is built into Redis's c-r-d-t types and you need to use those types deliberately.
+
+a-w-s comparison: Standard and Premium are roughly ElastiCache for Redis with cluster mode disabled and enabled. Enterprise Active-Active is roughly MemoryDB or ElastiCache Global Datastore — close, but not identical.
+
+Now, cache patterns. Redis is fast and easy, and the easiest way to introduce bugs into a working system. Pick a pattern deliberately.
+
+Cache-aside, sometimes called lazy loading, is the most common pattern. The application reads the cache. On miss, it reads the database, writes the value to the cache with a t-t-l, and returns. Simple, popular, and the source of the thundering-herd bug: when a hot key expires, many concurrent requests miss simultaneously and all hit the database. Mitigate with probabilistic early refresh — refresh a key with small probability when it is nearing its t-t-l — or with per-key locking around the database read.
+
+Write-through. Every write goes to cache and to the database synchronously. The cache is always consistent with the database. Writes pay double latency. Use write-through for write-light, read-heavy data.
+
+Write-behind, sometimes called write-back. Writes go to the cache first, and an asynchronous worker drains them to the database. Write latency is lowest, but you can lose writes if the cache crashes before drain. Risky for systems of record.
+
+Read-through is a variant of cache-aside where the cache itself fetches from the database on miss, through a Redis module or an application abstraction. It hides the miss path from callers, which simplifies application code at the cost of more cache configuration.
+
+Two non-cache uses of Redis are worth knowing because they appear in every Azure architecture diagram. Session store: App Service and web app scale-out lose sticky session affinity easily; storing sessions in Redis lets any instance serve any request. Rate limiter, also called token bucket: an atomic increment plus a t-t-l is the smallest possible distributed rate-limit primitive.
+
+One discipline to enforce. Always set a t-t-l on cache entries unless you have an explicit reason not to. Cache without t-t-l fills, evicts unpredictably, and becomes a debugging nightmare months in.
+
+A second discipline: think about invalidation up front. The famous quote that there are two hard problems in computer science — cache invalidation and naming things — is true for a reason. When the underlying database changes, the cached value is stale. The cache-aside pattern handles this through the t-t-l: stale data lives for at most the t-t-l before the next miss refreshes it. For data where stale answers are unacceptable, you need explicit invalidation — the writer deletes the cache key on every database update. The trap is that distributed systems make explicit invalidation hard. The writer might crash after writing to the database and before deleting the cache, leaving a stale entry. Idempotent invalidation, retries, and reasoning about partial-failure modes are what cache invalidation actually looks like in production. Plan for it from the start, or accept a t-t-l-bounded staleness as the contract.
+
+That brings us to the close. A short decision tree for relational and caching.
+
+For a new application on the sequel server stack, use Azure sequel database in v-core mode, Business Critical or Hyperscale tier.
+
+For an existing sequel server estate you are migrating, ask whether the application uses instance-level features. If yes, use Azure sequel managed instance. If no, use Azure sequel database.
+
+If you need full sysadmin access or an unsupported feature, use sequel server on an Azure virtual machine.
+
+For an open-source application: PostgreSQL goes on Azure Database for PostgreSQL Flexible Server. MySQL goes on Azure Database for MySQL Flexible Server.
+
+For a cache: single region with classic patterns goes on Azure Cache for Redis Premium. Multi-region writes or Redis modules go on Azure Cache for Redis Enterprise.
+
+And the meta-pattern. A typical workload pairs Azure sequel database — or PostgreSQL Flexible Server — with Azure Cache for Redis Premium, fronted by an application that reads through the cache for hot data and falls back to the database for cold. With auto-failover groups on the database and zone-redundant Redis, the data tier survives both availability-zone and regional failures with minutes of configuration effort, not weeks. no-sequel and analytics come next.

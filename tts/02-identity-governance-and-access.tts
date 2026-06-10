@@ -1,0 +1,171 @@
+In the cloud, the network perimeter is gone. Your application is reachable from anywhere; your control plane is reachable from anywhere. The only thing standing between an attacker and your data is who they prove themselves to be, and what you have decided they can do. That is identity and access control, and in Azure, the front door for both is Microsoft Entra i-d.
+
+Get this layer right — strong identities, least-privilege roles, policy guardrails — and most of cloud security falls into place. Get it wrong, and no amount of firewall configuration will save you.
+
+Let's start with Microsoft Entra i-d. Entra i-d was renamed from Azure Active Directory in 2023, but it is still the same service. It is Microsoft's cloud identity provider. It holds your users, your groups, your applications, your devices, and the policies that govern how they sign in. Every Azure subscription is anchored to exactly one Entra i-d tenant, and every authentication into Azure goes through it.
+
+Two things to get straight up front. First: Entra i-d is not a cloud version of on-premises Active Directory. They share heritage and a name, but the protocols differ. On-premises Active Directory speaks Kerberos and l-d-a-p. Entra i-d speaks o-auth two point zero, OpenID Connect, and s-a-m-l. You cannot point a Windows domain-joined server at Entra i-d for legacy authentication — that is what Entra Domain Services, a separate service, was built for.
+
+Second: a tenant is the identity boundary, not the subscription. A single tenant can hold many subscriptions. An organisation might run one tenant for the company and another for a regulated subsidiary. Users in tenant A cannot directly access resources in tenant B without an explicit guest invitation.
+
+The a-w-s analogue is loose. i-a-m is per-account; Entra i-d is per-organisation and spans every subscription underneath. a-w-s Identity Center, formerly called s-s-o, is closer to Entra i-d's enterprise role, but Entra is the older, deeper product. It also powers Microsoft three sixty five, Dynamics three sixty five, and thousands of third-party software-as-a-service apps.
+
+Now, users and groups. Inside a tenant, three principal types matter most.
+
+The first is users — humans. Each user has a user principal name, often shortened to u-p-n, that looks like an email address. They can be cloud-only, created directly in Entra, or synced from on-premises Active Directory.
+
+The second is groups — collections of users, or of other principals. Two flavours: security groups for granting access, and Microsoft three sixty five groups for collaboration, which back a mailbox, a Teams workspace, and a SharePoint site. For governance, you care about security groups.
+
+The third is service principals — non-human identities that represent applications. We cover those next.
+
+Groups can be assigned, where you add members manually, or dynamic, where membership is computed from a rule — for example, all users whose department equals finance. Dynamic groups eliminate hand-curation, but they require an Entra i-d p-one licence.
+
+For role-based access control at scale, the pattern is always: assign roles to groups, not to individual users. Even if a group has one member today. When responsibilities shift, you change group membership — not dozens of role assignments scattered across resource groups. A six-month-old subscription where every assignment is per-user is the surest sign of a directory that nobody is steering.
+
+Next, workload identities. When code, not a human, needs to call Azure — a c-i pipeline deploying templates, a function reading a secret, a daemon writing to storage — it needs an identity. Entra i-d gives you three options, in order of preference.
+
+An app registration is the definition of an application: its name, the a-p-is it can call, and the credentials it can use. It lives in Entra i-d. Think of it as the class.
+
+A service principal is the instance of that app inside a tenant — the actual identity that role assignments bind to. Think of it as the object. One app registration can have service principals in multiple tenants, which is how multi-tenant a-p-is work.
+
+A managed identity is Azure's fully managed workload identity. Microsoft creates the underlying service principal for you, rotates the credentials automatically, and ties the lifecycle to the resource. There are two flavours. A system-assigned managed identity is created with the resource and dies with it — one-to-one. A user-assigned managed identity is a standalone resource you can attach to many resources; it outlives any one of them.
+
+The rule is: always prefer managed identities when both sides of the call are Azure. They eliminate the entire credential storage problem. No secrets to stash in Key Vault, no rotation jobs, no leaked client secrets in c-i logs. Fall back to a service principal with a federated credential — workload identity federation — when calling Azure from GitHub Actions, GitLab, or another open-i-d-connect-aware system. Fall back to a client secret only when nothing else works.
+
+The a-w-s comparison: app registration plus service principal is roughly an i-a-m application plus role. A managed identity is roughly an i-a-m role attached to an e-c-two instance through an instance profile. Workload identity federation is roughly an i-a-m role assumed through o-i-d-c.
+
+Let's move to conditional access and multi-factor authentication. Authentication in Entra i-d is governed by conditional access policies — Microsoft's policy language for: if signal X, require action Y. A policy has three parts.
+
+Assignments specify who and what the policy applies to: users, groups, applications, devices, locations, sign-in risk.
+
+Access controls — grant — specify what must be true to allow access: multi-factor authentication, a compliant device, a hybrid-joined device, an approved client app.
+
+Access controls — session — specify what restrictions apply once granted: session lifetime, sign-in frequency, app-enforced restrictions.
+
+Common policies in practice. All users must use multi-factor authentication for the Azure portal. Admin roles require phishing-resistant multi-factor authentication, which today means a fido-two security key or Windows Hello. Sign-ins from outside trusted countries are blocked, or require step-up authentication. Mobile device access requires the device to be marked compliant by Intune.
+
+Conditional access evaluation is always-on: every sign-in is evaluated against every applicable policy. Multiple policies combine — a sign-in must satisfy all grant controls from all applicable policies. That makes ordering irrelevant, but emergent behaviour subtle. The What If tool in the Entra portal is your friend when policies start interacting in ways nobody predicted.
+
+One historical note. Security defaults is a free, one-click baseline that requires multi-factor authentication for all users and blocks legacy authentication. Use it for small tenants without p-one licences. Tenants with conditional access licences should disable security defaults and write explicit policies instead.
+
+Sitting on top of conditional access is a related feature worth knowing: Privileged Identity Management, or p-i-m. p-i-m makes role assignments time-bound and just-in-time. Instead of being a permanent Owner on the production subscription, you are eligible for Owner, and to actually exercise the role you activate it for, say, two hours, with an approver and a justification recorded. The principle is that nobody walks around all day with the keys to production. Combined with conditional access requiring phishing-resistant multi-factor authentication for activation, p-i-m closes one of the most common attacker pathways: a permanent admin whose laptop gets phished at lunch.
+
+Next, external identities — business-to-business and business-to-consumer. Two distinct products, easy to confuse.
+
+Entra External i-d for business-to-business collaboration invites users from other organisations into your tenant as guests. They keep their home identity — for example, bob at partner dot com — and authenticate through their own tenant. Your tenant grants them access to specific resources. Use this for contractors, vendors, and partners. Cross-tenant access settings control which tenants can guest into yours, and what they can do once they arrive.
+
+Entra External i-d for customers — the rebrand of what used to be Azure a-d business-to-consumer — is for your application's end users. Customers sign up directly to a customer-facing tenant that you brand and customise. You write user flows for sign-up, sign-in, password reset, and social login through Google, Facebook, or Apple. This is what powers consumer apps where you don't want to use the corporate directory.
+
+The a-w-s analogue: business-to-business is roughly i-a-m Identity Center external accounts; customer business-to-consumer is roughly Cognito user pools. The dividing line is who owns the user account. Business-to-business leaves it with the partner. Business-to-consumer creates it in a customer-facing directory you control.
+
+Now, hybrid identity. Enterprises rarely start fresh. Most run on-premises Active Directory with thousands of user accounts, and they need those users to sign in to Azure and Microsoft three sixty five with the same credentials they use for domain-joined laptops. Entra Connect is the synchronisation engine that bridges the two directories.
+
+Three sign-in methods, in order of operational simplicity.
+
+Password hash synchronisation. A hash of the user's password hash is synced to Entra i-d. Authentication happens entirely in the cloud. There is no on-premises dependency at sign-in time, and the system survives a datacenter outage. This is the default and recommended choice.
+
+Pass-through authentication. Entra forwards the password to an on-premises agent that validates against Active Directory in real time. Useful when policy forbids any password material leaving the datacenter, but it requires the on-premises agent to be highly available.
+
+Federation, using Active Directory Federation Services. Entra redirects sign-in to an on-premises a-d-f-s farm. Most flexible — it supports smart-card authentication and complex claims rules — and most operationally expensive. Microsoft's direction is off federation for most cases.
+
+Entra Connect itself is being superseded by Entra Cloud Sync, a lighter-weight agent for new deployments that handles multi-forest and filtered scopes more cleanly. If you are setting up hybrid identity today, start with Cloud Sync unless a specific feature forces classic Connect.
+
+Now let's move from authentication to authorization. Role-based access control — r-bac for short — is how Azure decides what an authenticated principal can do. The model is a triple.
+
+The security principal is who is asking: a user, a group, a service principal, or a managed identity.
+
+The role definition is what set of actions are allowed — a list of action strings like Microsoft dot Compute slash virtual machines slash read, or wildcard slash write.
+
+The scope is where the actions are allowed.
+
+A role assignment binds principal plus role to a scope. Scope follows the resource hierarchy you saw in notebook one: management group at the broadest, then subscription, then resource group, then individual resource at the narrowest.
+
+An assignment at a parent scope inherits down. Assign Reader at the subscription, and the principal can read every resource group and every resource inside, unless an explicit Deny assignment cuts it off. Deny assignments are rare — they are created by managed services like Blueprints and Managed Apps, not by you directly.
+
+Two assignments to the same principal stack additively. Reader on the subscription, plus Contributor on one resource group, means Contributor on that group and Reader everywhere else. Azure has no general deny-overrides-allow rule beyond the rare Deny assignment. Effective permission is the union of all role grants.
+
+The a-w-s comparison is sharper here than for identity. Azure r-bac is roughly a-w-s i-a-m policies attached to roles and users. The shape difference is that a-w-s policies are json documents authored per principal, while Azure roles are reusable definitions you bind to principals at scopes. Azure leans toward roles as nouns; a-w-s leans toward policies as documents.
+
+Now, built-in roles and custom roles. Azure ships with several hundred built-in roles. Four of them you will see daily.
+
+Owner. Full access including the right to delegate roles. This is the break-glass role; reserve it.
+
+Contributor. Full access except delegating roles. This is the day-to-day, I-can-build-things role.
+
+Reader. View everything in the scope; no mutation. Safe for auditors, finance, and dashboards.
+
+User Access Administrator. Manages role assignments but not the underlying resources. Used to delegate the delegation right without granting Owner.
+
+Beyond those four, most roles are service-scoped. Storage Blob Data Contributor. Key Vault Secrets User. Acr Pull. Cosmos d-b Account Reader Role. These grant data-plane access — for example, reading blob contents — which is separate from the management-plane access that lets you reconfigure the storage account itself. Mixing them up is a common pitfall: a Storage Account Contributor cannot actually read blobs without also being granted a Storage Blob Data role. That control plane versus data plane split shows up across many Azure services, and r-bac is where it bites first.
+
+When no built-in role fits cleanly, write a custom role. The definition is json: a name, a list of allowed Actions for the control plane, a list of allowed DataActions for the data plane, a list of NotActions to subtract from Actions, and an AssignableScopes list that limits where the role can be used. Custom roles are tenant-wide objects but only assignable inside the scopes you list. Keep the count low. Every custom role is one more thing to audit, and one more thing to update when Azure adds a resource provider.
+
+A concrete example will make custom roles click. Imagine you want a role that lets an operations team restart virtual machines but do nothing else. The built-in Virtual Machine Contributor is too broad — it can resize, redeploy, delete. A custom role with two Actions — Microsoft dot Compute slash virtual machines slash read, and Microsoft dot Compute slash virtual machines slash restart slash action — and an AssignableScopes list pinned to the production subscription is the tight grant. The operations team gets exactly what they need, audit logs see exactly which restarts they performed, and nobody can accidentally delete a workload during a three a-m incident.
+
+Let's move to Azure Policy. Role-based access control decides who can act. Azure Policy decides what shape those actions can produce. The two compose. r-bac lets a Contributor create virtual machines; policy ensures the only virtual machines they create are in approved regions, have a tag for cost-centre, and use managed disks.
+
+A policy definition is json with three parts. Parameters are values you fill in at assignment time — for example, the list of allowed regions. The policy rule is an if condition over resource properties, paired with an effect. And metadata carries name, description, and category.
+
+Built-in definitions cover most common needs. Allowed locations. Allowed virtual machine s-k-us. Require a tag and its value. Storage accounts should disable public access. You write custom definitions when business rules demand it.
+
+Definitions do nothing until they are assigned to a scope — a management group, a subscription, or a resource group. At that point the rule starts evaluating against every resource at and below the scope.
+
+Initiatives, sometimes called policy sets, bundle related definitions into one assignment. Microsoft ships large initiatives mapped to standards: Microsoft Cloud Security Benchmark, i-s-o twenty-seven thousand one, n-i-s-t eight hundred fifty-three, p-c-i d-s-s. Assigning the i-s-o initiative at the root management group means hundreds of individual definitions start evaluating at once, and the compliance dashboard rolls them up into one score.
+
+The a-w-s analogue is interesting. Azure Policy is roughly a-w-s Config rules and Service Control Policies merged into one product. Service-control-policy-style hard prevention — deny — and Config-style audit — audit and deploy-if-not-exists — both live in the same engine.
+
+Now, policy effects. The effect is what the rule does when its if matches. The effects you will use most.
+
+Audit. Log a non-compliance event but allow the action. Safe to deploy; gives you data without breaking workloads.
+
+Deny. Block the request at the Azure Resource Manager layer before the resource provider sees it. The most powerful effect, and the easiest to weaponise. Start in audit, validate the false-positive rate, then switch to deny.
+
+Append. Adds fields to the resource as it is created — for example, force the tag environment to a default value.
+
+Modify. Like append, but can also edit existing resources through a remediation task. Used for tag standardisation, enabling diagnostic settings, and similar fixes.
+
+Deploy-if-not-exists, often shortened to dine. When a matching resource appears, deploy a related resource alongside it. The classic example: when a virtual machine is created, deploy the Log Analytics agent extension. This effect requires a managed identity on the policy assignment, because the policy engine has to act on your behalf to create the related resource.
+
+Audit-if-not-exists. Like deploy-if-not-exists, but it only logs; it does not deploy.
+
+Exemptions let you carve out specific scopes or resources from a policy assignment without removing the assignment itself. They are auditable — each carries a category and an expiry — which keeps the we'll-fix-it-later exceptions visible instead of buried.
+
+There is an order of effects at evaluation time. Disabled first, then append and modify which transform the request, then deny which blocks, then audit-if-not-exists and deploy-if-not-exists which react after the create. That order is what lets you compose policies that, say, append a default tag and then deny if the value is still wrong. Both effects fire, in that order.
+
+A real-world example helps. Suppose your security team wants every virtual machine in production to have Microsoft Defender for Servers enabled, every storage account to have public blob access disabled, and every public endpoint to be fronted by a web application firewall. That is not one policy — it is dozens of related rules. Microsoft publishes the Microsoft Cloud Security Benchmark initiative which already bundles them. You assign the initiative once, at the production management group. From that point, every new resource is evaluated against every rule in the benchmark, and the compliance dashboard shows you a single percentage score that rolls up the whole estate. When auditors ask, you point them at the dashboard rather than at thirty different runbooks.
+
+Next, putting management groups to work. Management groups are the lever for applying policy and role-based access control consistently across many subscriptions. The shape most enterprises converge on follows Microsoft's Cloud Adoption Framework landing zones.
+
+Picture a tree. At the root, the root management group. Underneath, a Platform branch holding shared services like networking, identity, and monitoring — typically with a connectivity subscription, an identity subscription, and a management subscription beneath it. Alongside Platform, a Landing Zones branch holding workload subscriptions, organised by stage — Production with one or more workload subscriptions, and Non-production with its own. Off to the side, a Sandbox branch with looser policy and a spend cap. And finally a Decommissioned branch for subscriptions that are read-only, scheduled for deletion.
+
+Policies attach high in that tree. A deny-public-i-p policy lives at the Landing Zones management group and inherits down to every workload subscription. Sandbox gets its own laxer policy set. Decommissioned gets a deny-all-writes. The pattern lets a platform team write a small number of policy assignments and have them cover the whole estate.
+
+Azure Blueprints was the original packaged-environment tool — bundles of role assignments, policy assignments, and Azure Resource Manager templates applied as a unit. Blueprints was deprecated in July twenty twenty-six, and replaced by Azure Deployment Stacks plus Template Specs. Do not start new work on Blueprints. Existing customers should migrate.
+
+Tags are key-value pairs you attach to resources and resource groups. They are the dimension that cost reporting, billing exports, and most automation scripts pivot on. A common scheme: environment, owner, cost-center, application, data-classification. Use policy with the modify effect to enforce required tags. Relying on engineers to remember tags by hand is how thirty percent of your spend ends up in the untagged bucket.
+
+Now, resource locks. Locks are the seatbelt against accidental deletion. Two kinds, both applied at subscription, resource group, or resource scope.
+
+CanNotDelete allows read and modify, but blocks delete.
+
+ReadOnly blocks even modifying. Be careful with ReadOnly — many operations that look read-only are actually write calls under the hood, so ReadOnly locks cause more support tickets than CanNotDelete.
+
+Locks are checked by Azure Resource Manager before the resource provider sees the request, so they apply uniformly to portal, command line, s-d-k, and template deployments. Critically, locks inherit downward. A CanNotDelete lock on a resource group protects every resource in it.
+
+Locks intentionally sit outside the role-based access control role hierarchy. Even an Owner cannot delete a locked resource without first removing the lock — that is the whole point. The only roles with intrinsic lock-management rights are Owner and User Access Administrator. The Microsoft dot Authorization slash locks slash actions are tightly held. Use locks on production resource groups, customer-data storage accounts, peered virtual network gateways, and anything else where oops is unrecoverable.
+
+That brings us to the close. The identity and governance stack composes top to bottom.
+
+Entra i-d answers who you are. That is authentication.
+
+Conditional access answers under what conditions you are allowed to sign in. That is the sign-in policy layer.
+
+Role-based access control answers what actions you can take once signed in. That is authorization.
+
+Azure Policy answers what shape those actions can produce. That is the guardrail layer.
+
+And locks answer what you absolutely cannot destroy.
+
+Each layer is enforced by Azure Resource Manager at the chokepoint, so the picture is consistent across portal, command line, s-d-k, and templates.
+
+When designing a new workload, the order is the same. Which principals need access. What role they need, at what scope. Which policy guardrails prevent misconfiguration. Which resources need a lock in production. Do those four in order, and you have built the spine that every later service in this series will hang off. Compute comes next.

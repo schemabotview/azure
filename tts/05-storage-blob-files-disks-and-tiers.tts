@@ -1,0 +1,137 @@
+Almost every Azure workload eventually writes to storage. Logs go to a blob. Images land in a c-d-n-backed container. Backups archive to cold tier. A Spark job reads parquet from a data lake. A virtual machine boots from a managed disk. Three different services — blob, files, and disks — meet most of those needs, and they all live inside one container: the storage account.
+
+The trick to thinking about Azure storage is to separate three orthogonal choices. The account — its kind, redundancy, and region. The service — blob, file, queue, or table. And the tier — hot, cool, cold, archive, or the disk performance tiers. Pick badly on any one of those, and you either over-pay or hit a performance cliff.
+
+Let's start with the storage account itself. A storage account is the namespace and security boundary for blobs, files, queues, and tables. The name is globally unique, because it backs the u-r-l, and it has to be d-n-s safe — three to twenty-four characters, lowercase letters and numbers only.
+
+The kind decides what services and s-k-us are available. StorageV-two — also called general-purpose v-two — is the default. It supports blobs, files, queues, and tables. It supports all access tiers and all redundancy options. Pick it unless you have a reason not to.
+
+Premium block blob is s-s-d-backed, sub-ten-millisecond latency for blob workloads with high transaction rates. Premium file shares are s-s-d-backed for s-m-b or n-f-s file shares that need low latency. Premium page blobs are used for unmanaged virtual hard disks and are almost obsolete since managed disks took over.
+
+A storage account has its own endpoint per service. There is a blob endpoint, a file endpoint, a queue endpoint, and a table endpoint. Each can be locked behind a private endpoint so traffic never traverses the public internet.
+
+Now, redundancy — where your bytes actually live. Every storage account picks one redundancy s-k-u at create time. The s-k-u sets how many copies of your data exist and how widely they are spread.
+
+Locally-redundant storage, or l-r-s, keeps three copies in one datacenter. It is the cheapest option, and it survives a disk or rack failure.
+
+Zone-redundant storage, or z-r-s, keeps three copies spread across three availability zones in one region. It survives a whole-datacenter failure.
+
+Geo-redundant storage, or g-r-s, keeps six copies — three locally in the primary region, and three in the paired region. It survives a region failure, but the secondary is read-only until you fail over.
+
+Read-access geo-redundant storage, often called r-a-g-r-s, is the same as g-r-s but exposes the secondary as readable while the primary is still up. That is useful for read-heavy global applications.
+
+Geo-zone-redundant storage, or g-z-r-s, combines zone redundancy in the primary region with locally-redundant storage in the paired region. It survives both a datacenter and a region failure. r-a-g-z-r-s is the read-access version. r-a-g-z-r-s gives you the strongest combination of high availability and disaster recovery, at the highest price.
+
+Two practical notes. The geo variants replicate asynchronously, which means the paired region copy lags by seconds to minutes. A failover therefore is not free of data loss; some recent writes may not have made it across. And customer-managed failover lets you trigger the primary-to-secondary swap yourself rather than waiting for Microsoft. It is a one-way operation that loses the original primary, so test it before you ever need it.
+
+a-w-s comparison: l-r-s is roughly s-three in one availability zone. z-r-s is roughly standard s-three. g-r-s is roughly s-three with cross-region replication. r-a-g-r-s is roughly s-three multi-region access points.
+
+A concrete way to think about choosing redundancy. For development and test data, l-r-s is fine — you do not need cross-zone protection for throwaway state. For production application data, z-r-s is the right default — it survives the failure of one datacenter in the region for very little extra cost. For data that is genuinely irreplaceable — backups, transaction logs, customer documents — go to g-z-r-s, so that even a region-wide event still leaves you with readable copies elsewhere. The instinct to put everything on the most redundant tier is expensive and unnecessary. Pick the redundancy that matches the recovery objective for the data class.
+
+Let's move to blob storage — the workhorse of the storage account. Three blob types, chosen at create time.
+
+Block blob is what most blobs are. It is optimised for upload, parallelisable, and supports versioning. Use it for documents, images, backups, parquet files, and logs.
+
+Append blob is write-once-per-block and optimised for log ingestion. Each append operation is atomic and ordered.
+
+Page blob supports random read and write of fixed-size pages. It backs unmanaged virtual hard disks, and you rarely create one by hand any more.
+
+Within block blob, each object has an access tier that trades latency for storage cost. Hot tier delivers millisecond first-byte latency at higher storage cost and cheap reads. Use it for data accessed frequently. Cool tier is milliseconds for first-byte, cheaper storage, higher read cost. Use it for data accessed monthly. Cold tier is also milliseconds for first-byte, even cheaper storage, even higher read cost. Use it for data accessed quarterly. Archive tier has first-byte latency measured in hours, the cheapest storage, and expensive reads. Use it for data accessed yearly.
+
+The key thing to know is that hot, cool, and cold are all online — the first byte returns in milliseconds. Archive is offline. You have to issue a rehydrate operation that takes hours, during which the blob is unreadable. Treat archive as tape, not as cold storage. That distinction trips up new Azure users who assume archive behaves like cool with a delay.
+
+Lifecycle management policies move blobs between tiers automatically by age. The classic policy reads: move to cool after thirty days. Move to cold after ninety. Move to archive after one hundred and eighty. Delete after seven years. You write the rules in json, and the storage service evaluates them once per day.
+
+To make the cost difference real, picture a hundred terabytes of logs sitting in hot tier. At hot prices, that is several thousand dollars a month just for storage. Apply a lifecycle policy that tiers anything older than thirty days to cool, and the math drops by roughly a third. Tier anything older than ninety days to cold, and it drops again. Tier anything older than a hundred and eighty days to archive, and the rarely-touched bulk of your retained logs is now sitting at single-digit dollars per terabyte per month. Lifecycle policies are one of the highest-leverage cost levers in Azure, and they cost nothing to enable.
+
+a-w-s comparison: the tiers map directly. Hot is roughly s-three Standard. Cool is roughly Standard infrequent access. Cold is roughly one zone infrequent access or Glacier Instant. Archive is roughly Glacier Flexible or Deep Archive. Lifecycle rules look almost identical between the two clouds.
+
+Now, immutability, versioning, and soft delete — three protections for data you cannot afford to lose.
+
+Soft delete keeps deleted blobs and containers around for a configurable retention window — anywhere from one to three hundred and sixty-five days. The recovery operation is a single a-p-i call. Enable soft delete on every production storage account.
+
+Versioning keeps every previous version of a blob automatically when you overwrite it. You list by version i-d and restore by promoting a version back to current. Versioning pairs naturally with soft delete.
+
+Immutability policies make blobs write-once-read-many — w-o-r-m. Two modes. Time-based, where the blob is locked until a specific date. And legal hold, where the blob is locked until the hold is cleared. Required for many compliance regimes — for example, sec seventeen-a four, and finra. Once a policy is locked, even an Owner cannot delete or modify the data. That is the whole point of w-o-r-m.
+
+Combine all three for ransomware resilience. Soft delete with thirty-day retention. Versioning on every container. And a one-year time-based immutability policy on backup containers. An attacker with full role-based access control still cannot destroy the backups. That is the kind of defence-in-depth that turns storage from a weak link into a strong one.
+
+Next, sas tokens and access control. There are three ways to authorise a request to blob storage.
+
+The first is Entra i-d and role-based access control. The caller authenticates with their identity — user, service principal, or managed identity — and Azure checks role assignments like Storage Blob Data Contributor. No shared secrets to leak. This is the modern default.
+
+The second is shared key. This is the account-wide master credential. Two keys exist per account so you can rotate one while keeping the other live. Anyone with the key has full access to everything. Treat it like a root password and rotate aggressively. Better still, disable shared-key access at the account level and force Entra-only authentication.
+
+The third is shared access signatures, often shortened to sas. A sas token is a time-bounded, scope-limited u-r-l token. Three flavours. A user-delegation sas is signed by an Entra i-d identity, not by the shared key. It is auditable and revocable by revoking the identity's permissions. This is the preferred sas flavour. A service sas is signed by the shared key and scoped to a single service. An account sas is signed by the shared key and scoped to the whole account.
+
+A sas token in a u-r-l is a bearer credential — anyone who sees it can use it. Always set the shortest practical expiry. Restrict by i-p if possible. Scope to the narrowest container or blob. And prefer user-delegation sas over service or account sas every time you can.
+
+A common pattern is to use a sas for one-off file sharing. Imagine someone needs to send a customer a large data export. Generate a user-delegation sas that grants read-only access to one blob, expires in twenty-four hours, and is restricted to the customer's i-p range. Send the u-r-l. When the time expires, or the i-p check fails, the link is dead. No accounts to provision, no credentials in inboxes, no manual cleanup. That is the kind of friction-free secure sharing that sas tokens were designed for, when used responsibly.
+
+Now, encryption. All Azure Storage is encrypted at rest by default with platform-managed a-e-s two-fifty-six keys. The choice you make is what manages the keys.
+
+Microsoft-managed keys are the default. Microsoft generates and rotates the keys. You never see them.
+
+Customer-managed keys live in your Key Vault, or in Managed h-s-m. The storage account uses the customer-managed key to wrap an internal data-encryption key. Revoke the customer-managed key, and the data becomes cryptographically inaccessible. That is a useful compliance lever — and a dangerous foot-gun if you fat-finger a key delete.
+
+Customer-provided keys are supplied by the caller on every request. This is niche, mostly used by storage gateways.
+
+Encryption in transit is enforced when you flip the secure-transfer-required flag at the account level. Always on for production accounts.
+
+Let's move to Azure Data Lake Storage gen-two. Gen-two is not a separate service. It is a storage account with the hierarchical namespace flag flipped on at create time. Flipping that flag gives you three things.
+
+Real directories. You can rename a directory atomically instead of renaming every blob underneath it. That matters hugely for Spark, Hadoop, and any tool that does a directory rename as part of its commit protocol.
+
+Posix-style access control lists on directories and files, in addition to role-based access control.
+
+And the a-b-f-s driver for Hadoop and Spark, which is faster than the legacy wasbs driver.
+
+The hierarchical namespace flag cannot be turned on or off after the account is created. Decide before you create the account. For any analytics workload — Spark, Synapse, Databricks, Fabric — turn it on. For pure object-storage workloads — static websites, image hosting — leave it off. The flat namespace is slightly cheaper.
+
+a-w-s comparison: Data Lake gen-two is roughly s-three with a hierarchical-namespace overlay. There is no direct s-three equivalent. Most Spark-on-s-three stacks pay the rename penalty or use Iceberg or Delta to avoid it.
+
+Now, Azure Files. Azure Files is managed shared file storage you mount over s-m-b or n-f-s. Two performance tiers.
+
+Standard is backed by hard disks, sized by capacity, billed pay-as-you-go. Use it for low-throughput general-purpose shares.
+
+Premium is backed by s-s-ds. Provisioned throughput and input-output operations scale with provisioned capacity. Use it for high-i-o workloads.
+
+Two protocols. s-m-b three is supported by Windows and modern Linux and Mac clients. Identity integration is through Entra Domain Services or on-premises Active Directory Kerberos. s-m-b is the default. n-f-s four point one is for Linux and Unix workloads that need posix semantics. It is premium-only, and there is no identity integration — authorisation is by network position, which means network security groups and private endpoints.
+
+Azure File Sync is the hybrid feature. You install a sync agent on a Windows file server on-premises, point it at an Azure Files share, and the agent tiers cold files to the cloud while leaving hot files local. Users see one familiar Windows file path. Storage costs collapse because rarely-touched files leave the on-premises disk. The pattern is the most common lift-and-shift for departmental file servers.
+
+a-w-s comparison: s-m-b shares are roughly f-s-x for Windows. n-f-s shares are roughly e-f-s or f-s-x for Lustre or ontap. File Sync has no direct a-w-s equivalent.
+
+A useful mental model for Files versus Blob. Blob is built for code that knows about objects — a-p-i calls, parquet readers, batch jobs. Files is built for code that does not know about Azure at all — legacy applications that open a file path, write a record, close the handle. If you can rewrite the application to call the blob a-p-i, do so; blob scales further and costs less. If you cannot — because the application is third-party, or rewriting it is more expensive than paying the file-share premium — Files is the bridge that keeps you moving without rewriting.
+
+Now, managed disks from the storage angle. Notebook three covered disks from a virtual machine sizing perspective. From the storage angle, two operational features matter.
+
+Snapshots are incremental, crash-consistent point-in-time copies stored as standard storage. A snapshot of an unchanged disk is essentially free — only the delta is stored. Snapshots are the right backup primitive for a virtual machine that is too small for full Azure Backup.
+
+Shared disks allow the same managed disk to be attached to multiple virtual machines at once, with the sharing option set and max shares greater than one. Shared disks are required for sequel server Failover Cluster Instances, Linux Pacemaker, and other clustered file systems. They are available on Premium s-s-d, Premium s-s-d v-two, and Ultra Disk.
+
+Disk-level encryption inherits the same Microsoft-managed-key or customer-managed-key choice as the storage account, with the bonus of encryption-at-host. Encryption-at-host encrypts the host's local cache and the operating system disk before it ever hits the storage layer. Turn it on for high-compliance workloads.
+
+Now, Azure NetApp Files. Azure NetApp Files is a separate, premium file service for the highest-end workloads. s-a-p hana shared storage. Large electronic design automation simulations. g-p-u training data sets. Latency-sensitive databases that need n-f-s four point one, or s-m-b, at sub-millisecond latency with hundreds of thousands of input-output operations per second per volume.
+
+It is provisioned in capacity pools — a combination of size and service level: Standard, Premium, or Ultra. You carve volumes out of the pool. Snapshots are instantaneous and space-efficient. Cross-region replication is built in.
+
+NetApp Files is meaningfully more expensive than Premium Azure Files, and you should only reach for it when the workload genuinely needs it. The trigger is usually a vendor benchmark — s-a-p, an electronic design automation tool, or an a-i training pipeline — that says: NetApp ontap at these latencies, or we will not certify the deployment.
+
+Two more practical patterns worth covering before we close.
+
+Static website hosting is a built-in blob feature you flip on at the account level. It serves index dot h-t-m-l and error documents directly out of a special dollar-web container, behind the standard blob endpoint. Combined with a c-d-n profile in front, you get a globally cached static site for pennies a month. No web server to manage, no virtual machine. For a marketing site, a documentation portal, or a single-page application front-end, that is hard to beat.
+
+The other pattern is private endpoints. By default, your storage account is reachable from the public internet at its blob, file, queue, and table endpoints, with access governed by Entra i-d and the storage firewall. For sensitive data, that is more attack surface than necessary. A private endpoint gives the storage account a private i-p inside your virtual network. The public endpoint can then be disabled entirely. Traffic from your applications travels over the Azure backbone, never the public internet, and only callers inside the virtual network — or connected through private link, v-p-n, or ExpressRoute — can reach the account at all. For any production storage account holding sensitive data, that is the configuration to aim at.
+
+That brings us to the close. A production storage layout, by workload, looks like this.
+
+Application data — parquet, images, backups — goes into a StorageV-two account with hierarchical namespace on if it is analytics. Use zone-redundant storage for high availability. Lifecycle rules tier by age. Soft delete, versioning, and immutability provide ransomware resilience. Use Entra i-d authentication only, and disable shared-key access at the account.
+
+Virtual machine disks are Premium s-s-d v-two for production operating system and data. Use customer-managed keys plus encryption-at-host for compliance. Snapshots provide quick restore.
+
+Shared file storage is Azure Files s-m-b Premium for Windows estates. n-f-s Premium for Linux. File Sync for hybrid offices.
+
+Highest-performance file storage is NetApp Files, but only when a benchmark forces it.
+
+Get the account, the redundancy, and the tier right, and storage becomes the boring thing it should be — a place to put bytes, not a recurring source of incidents. Networking comes next.

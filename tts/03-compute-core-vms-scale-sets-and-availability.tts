@@ -1,0 +1,147 @@
+Virtual machines are the oldest compute primitive in Azure, and still the busiest one. Every higher-level service — App Service, Azure Kubernetes Service nodes, Databricks clusters, even Azure sequel managed instance — runs on a virtual machine somewhere. You just stop seeing it. Understanding how virtual machines are sized, imaged, priced, given disks and network cards, grouped for availability, and scaled in fleets is the bedrock the rest of the platform sits on.
+
+The shape to hold in your head is this. A virtual machine is a bundle of compute — the size — storage — the managed disks — network — the network interface card — and placement — region, zone, and group. Get each piece right and the virtual machine behaves. Get one wrong, and the symptoms are subtle: performance cliffs, surprise bills, or a quiet single point of failure.
+
+Let's start with virtual machine families and sizing. Azure has well over four hundred virtual machine s-k-us, and they are organised into families, each tuned for a different workload profile. The naming convention encodes the family, the version, and a small set of feature flags. Take Standard underscore d-eight-s underscore v-five as an example. The d is the family — general purpose. The eight is the v-c-p-u count. The s flag means the s-k-u can attach premium s-s-d disks. And the v-five is the generation — a newer version, usually cheaper per unit of work.
+
+The families you will see most. The b-series is burstable and cheap. It accumulates c-p-u credits when idle and spends them when busy. Use it for development, test, and low-utilisation workloads. It is the equivalent of the a-w-s t-series.
+
+The d-series is the general-purpose balance of v-c-p-u, memory, and temp storage. It is the default first guess for a web app or an a-p-i.
+
+The e-series is memory-optimised, with roughly eight gigabytes of ram per v-c-p-u. Use it for caching, in-memory databases, and analytics.
+
+The f-series is compute-optimised, with a higher c-p-u-to-memory ratio. Use it for batch processing, gaming, and media encoding.
+
+The l-series is storage-optimised, with large n-v-m-e local disks. Use it for Cassandra, ClickHouse, anything that wants fast local input-output.
+
+The m-series is massive memory — up to several terabytes. It exists for s-a-p hana and other in-memory analytics workloads that simply will not fit in smaller boxes.
+
+The n-series is g-p-u. It splits into n-v, n-c, and n-d subfamilies, for visualisation, general compute, and deep learning training respectively.
+
+And the h-series is high-performance computing, with InfiniBand interconnects. Use it for tightly-coupled simulations.
+
+The trailing letters matter. The s flag, again, means the s-k-u can attach premium s-s-ds. The d flag means there is a local temp disk — ephemeral, fast, and lost the moment you deallocate the virtual machine. The a flag means the s-k-u runs on a-m-d silicon, which is often ten to twenty percent cheaper than the Intel equivalent for the same performance profile. And the generation versions — v-four, v-five, v-six — bump the underlying hardware. Newer is usually cheaper per unit of work, but not always available in every region, so always check before pinning.
+
+A common sizing mistake is to over-buy memory because the workload looks memory-hungry on a laptop. The right approach is to deploy on a d-series first, watch the actual memory and c-p-u graphs for a week, and only then move to an e-series if memory is the real bottleneck. The other common mistake is sticking with the s-k-u family the previous architect picked years ago. Generation jumps can be dramatic — moving from a v-three to a v-five often gets you the same performance at twenty to thirty percent less cost, with no application change. Treat sizing as a recurring tuning exercise, not a one-time decision.
+
+Next, images. Every virtual machine starts from a disk image. Three sources, in order of how much of the image you control.
+
+Marketplace images are published by Microsoft, Canonical, Red Hat, and third-party software vendors. They are versioned and they give you the fastest start.
+
+Custom images are what you build yourself. You take a marketplace image, install your runtime, run sysprep on Windows or the Azure agent on Linux, and capture the result. This is fine for one or two virtual machines in one region. It is not a production pattern.
+
+Azure Compute Gallery, formerly Shared Image Gallery, is the production way to manage custom images at scale. It holds image definitions — the family — and image versions — timestamped snapshots — and it replicates them across regions and into availability zones. Versions are signed and consumable from any subscription in your tenant through role-based access control.
+
+The practical pattern for a serious workload is to bake a hardened operating system image with Packer, or with the Azure command line, publish it to a Compute Gallery, replicate it to every region you deploy in, and reference it by gallery image version from your virtual machine scale set or template. Patch month means publishing a new version, not editing in place.
+
+a-w-s equivalent: marketplace images are roughly public a-m-is. Custom images are roughly private a-m-is. Compute Gallery is roughly e-c-two Image Builder plus cross-region a-m-i copy.
+
+Let's move to pricing models. The list price you see in the calculator is the pay-as-you-go rate. Almost nobody pays it for steady-state workloads. There are at least four ways to cut it.
+
+Reserved instances. You commit to a specific virtual machine size in a specific region for one or three years, and you get up to about seventy-two percent off the pay-as-you-go price. You can pay upfront or monthly. Reserved instances are best for predictable production workloads pinned to a known s-k-u.
+
+Azure Savings Plan for Compute. You commit to an hourly dollar spend on compute for one or three years, and you get up to about sixty-five percent off. The plan is more flexible than reserved instances because the discount applies across virtual machine families and regions automatically. Savings plans are best when you do not want to bet on a specific s-k-u.
+
+Spot virtual machines. You bid for unused Azure capacity and you get up to about ninety percent off. The catch is that Azure can evict the virtual machine with thirty seconds' notice when it needs the capacity back. Spot is perfect for batch jobs, c-i pipelines, and stateless scale-out workers that can be restarted. You set a max price — or use negative one for the on-demand cap — and an eviction policy of either deallocate or delete.
+
+Azure Hybrid Benefit. You bring your existing Windows Server or sequel server licences, with active Software Assurance, to Azure virtual machines. You get up to about forty percent off Windows virtual machines, and crucially this stacks with reserved instances and savings plans. For enterprises migrating Windows workloads, Hybrid Benefit is the biggest single-line saving.
+
+Combined, a production fleet often pays more than eighty percent off list. Reserved instances or savings plans for the steady-state base. Hybrid benefit on top. Spot for the burst layer. That is the math behind well-run Azure spend.
+
+A quick worked example. Imagine a workload that needs ten d-series v-five virtual machines running twenty-four seven, plus a burst layer of up to twenty more for daytime traffic peaks. At pay-as-you-go pricing, that fleet might cost forty thousand dollars a month. Switch the ten steady-state machines to three-year reserved instances and that base drops to around eleven thousand. Run the daytime burst layer on spot virtual machines and it costs another thousand or two instead of ten. The total is closer to thirteen thousand a month instead of forty. Three quarters of the spend, gone, with no architectural change — just better commercial choices.
+
+The trap to avoid is over-reserving. Reservations apply only to the exact s-k-u and region you commit to, and if the workload moves to a different region or a newer s-k-u, your reservation may sit underused. That is why savings plans, which float across families, have become the more popular default for organisations whose workloads churn.
+
+Now, managed disks. A virtual machine has three classes of disk attached.
+
+The operating system disk is where the operating system lives. It is always a managed disk, and there is one per virtual machine.
+
+Data disks are additional volumes for application data. You can attach up to the virtual machine s-k-u's documented maximum, which is typically between four and sixty-four disks.
+
+The temp disk is a local s-s-d on the host. It is ephemeral — wiped on stop and deallocate. On Windows it is mounted as drive d. On Linux it is mounted at slash m-n-t. Use it for swap and scratch, never for data you need to keep.
+
+Managed disks come in five tiers, ordered roughly by latency and price. Ultra Disk delivers up to a hundred and sixty thousand input-output operations per second per disk, with sub-millisecond latency. Reserve it for high-end transactional workloads and s-a-p hana logs. Premium s-s-d v-two delivers up to eighty thousand input-output operations per disk with low single-millisecond latency, and is the right default for most production workloads. Premium s-s-d is the classic premium tier — up to twenty thousand input-output operations and the same low latency. Standard s-s-d gives you a few hundred input-output operations at tens of milliseconds latency, which is fine for development, test, and low-traffic web tiers. And standard h-d-d gives you dozens of input-output operations, suitable for backup and archival.
+
+Premium s-s-d v-two is the newer of the two premium tiers, and it is almost always the better choice. Input-output operations and throughput are decoupled from disk size, so you can dial them independently. Classic Premium s-s-d ties input-output operations to capacity — a one-terabyte disk gets about five thousand input-output operations regardless of whether your workload needs a thousand or ten thousand.
+
+All managed disks are encrypted at rest by default with platform-managed keys. Flipping to customer-managed keys through Key Vault is a checkbox at create time. Snapshots are incremental and stored cheaply in standard storage. And shared disks let the same managed disk attach to multiple virtual machines simultaneously — used by Windows Failover Cluster and Linux Pacemaker.
+
+Next, network interface cards and accelerated networking. Every virtual machine has at least one network interface card attached to a subnet in a virtual network. Larger s-k-us allow multiple network cards, which is useful for separating management and data planes, or for network virtual appliances.
+
+Accelerated Networking is a single toggle that moves the network datapath off the host c-p-u and onto the smart network card hardware. Under the hood it uses s-r-i-o-v, but you do not need to care about the acronym. The effect on most workloads is dramatic. Throughput jumps from a few gigabits per second to thirty or more gigabits per second on supported s-k-us. Latency drops noticeably. And the host c-p-u stops burning cycles on packet processing.
+
+Accelerated networking is free, it is supported on almost every modern s-k-u, and there is essentially no reason not to turn it on. Many older templates and marketplace images still ship with it off by default — check before deploying.
+
+Now, proximity placement groups. Within a region, your virtual machines can land in different datacenters separated by enough fibre to add a few milliseconds of latency. For chatty multi-tier workloads — a web tier talking to a cache talking to a database — that overhead adds up.
+
+A proximity placement group is a hint to the Azure placer: keep these virtual machines physically close to each other. The first virtual machine in the group pins the datacenter. Later virtual machines are placed in the same one when capacity allows.
+
+The trade-off is real. Tighter co-location means more allocation failures when the chosen datacenter is full, and it conflicts with availability zone spread, which deliberately moves machines apart. Proximity placement groups solve a real latency problem, but they are not a default. Use them only when you have measured the latency tax and decided it matters.
+
+Let's move to availability. Azure offers three nested levels of redundancy for virtual machines. They answer different failure questions, and they cost different amounts.
+
+A single virtual machine sits in one rack, on one power supply. That gives you no high availability.
+
+An availability set spreads multiple virtual machines across racks within one datacenter. That protects against a rack or power-supply failure.
+
+Availability zones spread virtual machines across multiple datacenters within one region. That protects against the loss of a whole datacenter.
+
+And multi-region adds a disaster recovery copy in a paired or distant region. That protects against the loss of the whole region.
+
+Let's go deeper on the middle two, because the choice between them is one of the most common Azure design decisions.
+
+Availability set is the original primitive. Virtual machines in a set are spread across fault domains — racks with independent power and network — and across update domains, which are groups Azure patches at different times. The defaults are two or three fault domains and five update domains. The promise is that a planned maintenance event, or a single-rack failure, takes down at most one update domain or one fault domain. The s-l-a for virtual machines in an availability set is ninety-nine point nine-five percent.
+
+Availability zones are physically separate datacenters within a region. Spread a virtual machine scale set across all three zones, and the s-l-a jumps to ninety-nine point nine-nine percent. Zones are the newer, stronger primitive, and they are the default recommendation for any production workload in a zone-enabled region.
+
+Multi-region is the disaster recovery tier. You replicate state to a paired or distant region and fail over if the primary is unavailable. Cost roughly doubles. Complexity climbs sharply.
+
+Rules of thumb. Start with availability zones. Use availability sets only in regions without zones or when zone pricing is prohibitive. Add multi-region only for tiers where a regional outage is a business-critical event. And remember that availability sets and availability zones are mutually exclusive for a given virtual machine — you pick one. Virtual machine scale sets can span zones; classic single virtual machines sit in one zone, if they are zonal at all.
+
+Now, virtual machine scale sets — fleets, not pets. A virtual machine scale set is a managed group of identical virtual machines that scale together. Behind the curtain it is a template — the model — plus n instances. You change the model once and the scale set reconciles every instance toward it.
+
+Two orchestration modes, and the choice is permanent for a given scale set.
+
+Uniform orchestration is the classic mode. All virtual machines are identical, fast to create, and optimised for thousands of instances of the same shape. You give up some flexibility — no mixing s-k-us, no per-instance tweaks.
+
+Flexible orchestration is the newer default. Each virtual machine is a first-class resource you can see in the resource group. You can mix sizes, pin some to zones explicitly, and attach scale-set-style autoscale only when you want it. Create per instance is slightly slower, but the operational model is far easier to reason about. Use flexible for new scale sets unless a specific feature forces uniform.
+
+Both modes spread instances across availability zones when you ask, place them in fault domains for rack-level redundancy, and surface a single resource — the scale set — to role-based access control and tagging.
+
+The a-w-s equivalent: a scale set is roughly an e-c-two Auto Scaling Group. The shape is similar. Uniform feels closer to a legacy Auto Scaling Group with launch configurations. Flexible feels closer to a modern Auto Scaling Group with launch templates.
+
+Now, autoscale, instance protection, and rolling upgrades.
+
+Scale sets scale horizontally on rules you write against metrics — c-p-u, memory, queue depth, a custom Application Insights metric — or against schedules — eight a-m weekdays equals twenty instances, weekends equals four. Each rule has an aggregation window, a threshold, and a cooldown. Without cooldowns you get scaling oscillation, and the most common autoscale bug is a too-aggressive threshold that toggles between scale-in and scale-out every few minutes.
+
+Two operational levers worth knowing.
+
+Instance protection lets you flag an instance as protected against scale-in, so an in-flight job is not killed, or protected against the scale-set model, so a one-off manual tweak is not reverted on next reconcile. It is useful, but if you find yourself reaching for it often, your model is wrong.
+
+Rolling upgrades. When you update the model — a new image version, a different s-k-u — the scale set upgrades instances in batches. You choose a batch size, a healthy-instance threshold, and a pause between batches. Combined with application health extension probes or a load balancer health check, a bad image fails the upgrade automatically rather than rolling out everywhere.
+
+Think about the failure mode this prevents. Without rolling upgrades, you might apply a new image to all twenty instances at once, the image has a regression, the entire fleet is now broken, and your monitoring lights up. With rolling upgrades and a healthy-instance threshold of seventy-five percent, the scale set updates five instances, watches them for health, sees they fail their probe, and stops. Fifteen instances are still serving traffic on the previous image, and you have a clean rollback to a known-good state. The same idea — gradual rollout with a circuit breaker — is what every modern deployment system implements, and the scale set gives it to you in the platform.
+
+One more scale set trick: ephemeral operating system disks. Instead of a managed disk, the operating system lives on the virtual machine's local s-s-d. Storage cost is zero, reimage on update is much faster, but you cannot stop-deallocate — the disk would vanish. This is perfect for stateless web tiers, and a poor fit for anything that keeps state on the operating system disk.
+
+Next, Azure Dedicated Host. Most virtual machines land on shared hardware — you and other tenants split the same physical host. For regulated or licence-sensitive workloads, Azure Dedicated Host gives you the whole physical server. You pay for the host by the hour and run any number of virtual machines on it. You choose which generation of host and which datacenter zone.
+
+Two things Dedicated Host buys you. Physical isolation for compliance regimes like p-c-i, FedRAMP High, and some financial regulators, that require it. And bring-your-own-licence economics for software licensed per physical core — Windows Server, sequel server, some Oracle products. Saving the per-core licence on every virtual machine that runs on the host can dwarf the host rental cost.
+
+If neither applies, stay on the shared fleet. Dedicated Host is meaningfully more expensive per v-c-p-u, and harder to scale.
+
+And that brings us to the close. A production virtual machine workload, top to bottom, looks like this.
+
+The image is a hardened operating system, published as a Compute Gallery version, replicated to your regions.
+
+The s-k-u and pricing — d-series for general-purpose, sized from real load data. Reserved or savings plan for the steady-state base. Spot for burst. Hybrid benefit if you bring Windows licences.
+
+The disks are Premium s-s-d v-two for operating system and data. Ultra only if a benchmark proves you need it. Encryption with customer-managed keys if compliance demands.
+
+The networking has accelerated networking on. The network card sits in the subnet with the right network security group. No public i-p unless an explicit gateway or load balancer demands one.
+
+The placement is a virtual machine scale set in flexible orchestration, spread across all three availability zones in the region. Multi-region only if recovery-time and recovery-point objectives require it.
+
+The scale is autoscale on c-p-u and queue depth, with cooldowns. Rolling upgrades with health probes. Ephemeral operating system disks for stateless tiers.
+
+Get those six right and the virtual machine tier disappears as a problem to think about — which is exactly what you want. Your attention belongs higher in the stack, on the app and the data. App Service, Functions, and containers come next.

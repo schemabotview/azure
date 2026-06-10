@@ -1,0 +1,135 @@
+Identity decides who can call your services. Networking decides which packets ever get to try. Even on the most carefully role-based-access-controlled subscription, a misconfigured network is the path most incidents take. A public i-p that should not exist. A route that bypasses the firewall. A subnet that leaks into the wrong virtual network. Azure's networking surface is wide, but it composes from a small set of primitives, and once you have the shape in your head, the rest is configuration.
+
+The mental model: a virtual network is your address space. Subnets carve it up. Network security groups are the firewall on each subnet. Routes decide where packets go. And peering, v-p-n, ExpressRoute, Private Link, and Virtual w-a-n are the various ways one virtual network talks to other virtual networks, to on-premises, and to Azure platform-as-a-service.
+
+Let's start with virtual networks and subnets. A virtual network is a private r-f-c nineteen-eighteen i-p-v-four — and optionally i-p-v-six — address space, scoped to a single region and subscription. You pick a c-i-d-r block at create time — say ten dot fifty dot zero dot zero slash sixteen — and carve subnets out of it. Resources you place in a subnet get a network interface card with a private i-p from that subnet's range.
+
+Three properties of subnets you cannot un-pick later without pain.
+
+Size. Azure reserves five i-p addresses per subnet — the network address, two for d-n-s and gateway, the broadcast address, and an internal address. Sizes you find under-spec'd six months in are expensive to grow.
+
+Delegation. Some platform-as-a-service services — App Service virtual network integration, Container Apps, Azure Database for PostgreSQL flexible server — require a delegated subnet they own exclusively. Once delegated, no other resource can join it.
+
+Service association. A subnet can hold either network interface cards or a specific service like Azure Bastion or a v-p-n Gateway. Never both.
+
+Address-space planning matters more than it looks. Virtual networks that need to peer must have non-overlapping ranges. If every team grabs ten dot zero dot zero dot zero slash sixteen, your peering story dies on day one. Plan a single organisation-wide r-f-c nineteen-eighteen allocation up front — a slash fourteen or slash thirteen that you carve slash sixteens out of per workload — and stick to it. The teams that skip this step end up doing a network re-addressing project two years in, which is the most painful project in cloud operations.
+
+a-w-s comparison: a virtual network is roughly a virtual private cloud. A subnet is roughly a subnet — with one important difference. Azure subnets are not zonal. A subnet spans the region, and zone placement is per-resource.
+
+Next, network security groups and application security groups. A network security group, often shortened to n-s-g, is a stateful firewall you attach to a subnet, a network interface card, or both. Rules are five-tuple matches — source, source port, destination, destination port, protocol — with allow or deny, evaluated in priority order. The lowest priority number wins.
+
+Three rule sources that surprise newcomers.
+
+Service tags. Symbolic names for Microsoft i-p ranges — Storage, AzureKeyVault, Sql, Internet, VirtualNetwork. Microsoft updates the underlying ranges. You do not have to.
+
+Default rules. Every network security group ships with three allow rules and three deny rules at the bottom of the list — AllowVnetInBound, AllowAzureLoadBalancerInBound, DenyAllInBound, plus their outbound counterparts. You cannot delete them. You can only override them with higher-priority rules.
+
+Effective rules. When a network security group is attached at both the network interface card and the subnet, both must allow the traffic. Use the effective security rules view to see what is actually happening. That view has rescued more troubleshooting sessions than any other tool in the portal.
+
+Application security groups let you express network security group rules against logical groups of network interface cards, rather than against i-p ranges. You tag the network interface cards of every web tier virtual machine as a-s-g-web. You tag every database virtual machine as a-s-g-d-b. Then you write rules like: allow a-s-g-web to a-s-g-d-b on port five-four-three-two. When the cluster scales, new network interface cards inherit the tag, and the rule keeps working without any i-p juggling.
+
+a-w-s comparison: a network security group is roughly an a-w-s security group plus a network access control list combined. An application security group is roughly the a-w-s security-group-referencing-security-group pattern, but as a first-class object.
+
+A useful way to think about network security group design is to ask, for each subnet, two questions. Which other subnets need to talk to me, and on what ports? Which destinations do I need to talk to, and on what ports? Write rules for those answers, then deny everything else. Start with the inbound list explicit and deny-all at the bottom — never the other way around. The number of incidents that trace back to an inbound rule allowing more than it should is large, and they are almost always reachable by writing rules from a deny-by-default posture instead of an allow-by-default one.
+
+Let's move to routes — system, user-defined, and b-g-p. Every subnet has a routing table. Three sources of routes, in increasing priority.
+
+System routes are auto-created by Azure for the virtual network itself, for peered virtual networks, for gateways, and for the default route zero dot zero dot zero dot zero slash zero pointing at the internet.
+
+User-defined routes — often shortened to u-d-r — are routes you write in a route table and associate with a subnet. They override system routes. The common pattern: zero dot zero dot zero dot zero slash zero with the next hop set to Azure Firewall, to force all egress through the firewall.
+
+b-g-p routes are learned dynamically from a v-p-n Gateway or an ExpressRoute circuit. They are used to advertise on-premises networks into Azure and Azure ranges back to on-premises.
+
+Routing in Azure is longest-prefix match first, then route-source priority — user-defined routes beat b-g-p routes, which beat system routes. A common bug is forgetting that when you turn on forced tunneling by routing zero slash zero through a firewall, you also need a route back for response packets. Without it, the firewall sees an asymmetric flow and drops it. The effective routes view on a network interface card is your friend whenever a packet is not going where you expected.
+
+Now, egress — how virtual machines in a private subnet reach the internet. Three managed ways, and a fourth that you should avoid.
+
+A public i-p on each virtual machine is simplest, least secure, and hardest to audit. Avoid it for production.
+
+A n-a-t Gateway is a managed, stateful, outbound-only network address translator. You attach it to a subnet, and all egress from that subnet leaves through the n-a-t Gateway's pool of public i-p addresses. It scales transparently and charges per gigabyte processed. The right default for outbound-only traffic that does not need layer seven inspection.
+
+Azure Firewall is a managed layer three to layer seven firewall with fully qualified domain name filtering, a Microsoft threat intelligence feed, intrusion detection and prevention, and t-l-s inspection in the premium tier. It goes in a dedicated subnet called AzureFirewallSubnet, and it receives traffic by user-defined route. There are three tiers — Basic, Standard, Premium. Premium is what most enterprises actually run.
+
+A network virtual appliance is a third-party firewall image — Palo Alto, Fortinet, Check Point — deployed on virtual machines. Use this when you already standardise on a vendor and want the same policy on-premises and in the cloud.
+
+There is also Azure Firewall Manager, which centralises firewall policy across virtual networks and Virtual w-a-n hubs. Do not confuse it with Azure Firewall itself. The manager is the policy plane. The firewall is the data plane.
+
+a-w-s comparison: n-a-t Gateway is roughly the a-w-s n-a-t Gateway directly. Azure Firewall is roughly a-w-s Network Firewall plus some web application firewall behaviour.
+
+Now, virtual network peering. Peering connects two virtual networks at the fabric layer. Traffic between peered virtual networks flows over the Azure backbone — low latency, high throughput, no v-p-n or gateway hop in the middle.
+
+Two flavours. Regional peering is between two virtual networks in the same region. Global peering is between virtual networks in different regions — same model, slightly higher per-gigabyte cost.
+
+Three properties to remember.
+
+Peering is non-transitive. If virtual network A is peered with virtual network B, and B is peered with C, A cannot reach C through B by default. You either turn on gateway transit so B's gateway or firewall serves as a hop, or you set up a hub-and-spoke topology explicitly.
+
+Peering connections are directional. You must create the peering on both virtual networks, even though they refer to each other.
+
+Peering needs non-overlapping address spaces. This is the address-planning constraint that bites organisations who did not plan early.
+
+Hub-and-spoke is the standard enterprise topology. A central hub virtual network holds the firewall, the v-p-n or ExpressRoute gateway, and the d-n-s resolvers. Each workload virtual network is a spoke peered to the hub. Gateway transit lets the spokes reach on-premises through the hub's gateway, without each spoke needing its own gateway. The Cloud Adoption Framework landing zones from notebook two deploy exactly this shape automatically.
+
+Picture the data flow concretely. A virtual machine in spoke A wants to send a request to an internal a-p-i hosted in spoke B. The packet leaves the virtual machine, hits the subnet's route table, and a user-defined route sends it to the firewall in the hub. The hub firewall inspects the traffic against its rules, allows it, and forwards it. Because the hub is peered to both spokes, the firewall can reach spoke B directly. The response follows the same path back. From the virtual machine's perspective, it talked to the other spoke. From the security team's perspective, every packet between spokes passed through a centrally managed firewall with full logging. That is the value of hub-and-spoke — one chokepoint for inspection, one place to update policy.
+
+Let's move to v-p-n Gateway. v-p-n Gateway lets a virtual network talk i-p-sec to on-premises, or to remote users.
+
+Two flavours. Site-to-site v-p-n is an i-p-sec tunnel between Azure and an on-premises v-p-n device. Bandwidth and reliability are tied to the s-k-u — sizes from v-p-n-g-w-one through v-p-n-g-w-five, with availability-zone-redundant variants. Use it for hybrid networking without an ExpressRoute circuit.
+
+Point-to-site v-p-n is for individual user devices, connecting through OpenVPN or i-k-e-v-two. Authentication is by certificate, radius, or Entra i-d. Point-to-site is the work-from-home story.
+
+Active-active mode runs two v-p-n Gateway instances simultaneously, with two public i-p addresses and two tunnels — both forward traffic. Pair it with a redundant on-premises device for higher availability. Zone-redundant s-k-us spread the gateway across availability zones.
+
+The throughput ceilings are real. The smallest v-p-n-g-w-one does roughly six-hundred-fifty megabits per second aggregate. v-p-n-g-w-five does ten gigabits per second. If you need more than that, or sub-millisecond latency to on-premises, you have outgrown v-p-n. That is the ExpressRoute conversation.
+
+Now, ExpressRoute. ExpressRoute is a private, dedicated layer-two or layer-three link between your on-premises network and Azure, that bypasses the public internet entirely. You buy a circuit — with a chosen bandwidth from two hundred megabits per second up to one hundred gigabits per second — from a Microsoft connectivity partner. Most large telcos and major colocation facilities qualify. The circuit terminates at an ExpressRoute peering location, which is an Azure edge point of presence.
+
+Two peering types over the circuit. Private peering carries traffic to virtual networks through an ExpressRoute Gateway. That is the classic use. Microsoft peering carries traffic to Microsoft three sixty five, Dynamics three sixty five, and Azure platform-as-a-service public endpoints over the private link. Microsoft peering is rarely used now that Private Link exists.
+
+Three features worth knowing.
+
+Global Reach. It connects two ExpressRoute circuits in different regions, so your on-premises sites talk to each other over Microsoft's backbone. That is cheaper and faster than running a private m-p-l-s wide-area network between them.
+
+FastPath. It bypasses the ExpressRoute Gateway for data-plane traffic, dropping latency by a few milliseconds. Worth turning on for high-throughput workloads.
+
+ExpressRoute Direct. Port-level connectivity with no carrier in the middle. For organisations that already have presence in an Azure peering colocation and want ten or one hundred gigabits per second without a partner.
+
+ExpressRoute is the choice when you need deterministic latency, high bandwidth, or compliance constraints that forbid traversing the public internet. Costs reflect that — circuit fees plus port fees plus the gateway. Most enterprises run both ExpressRoute as the primary and site-to-site v-p-n as the backup, for resilience.
+
+A subtle thing to know about ExpressRoute is that it does not, by itself, encrypt traffic. The link is private but not encrypted. For regulated workloads where transport encryption is mandated, you layer m-a-c-sec on the circuit at layer two if your carrier supports it, or run i-p-sec over the ExpressRoute as a logical overlay at layer three. The latter is more common, because most carriers do not offer m-a-c-sec. Plan for that during design — it is not a small architecture decision to retrofit.
+
+Next, Virtual w-a-n. Azure Virtual w-a-n is managed hub-and-spoke at planet scale. Instead of you building hubs in each region with peering, gateways, and firewalls glued together, Virtual w-a-n gives you a virtual hub per region with built-in virtual network connections, site-to-site and point-to-site v-p-n endpoints, ExpressRoute circuit attachments, Azure Firewall integration, and hub-to-hub global routing on Microsoft's backbone.
+
+Two s-k-us. Basic, which is v-p-n only. And Standard, which is everything. Use Standard.
+
+The pitch. A multinational with thirty branch sites and a dozen Azure regions sets up a Virtual w-a-n, attaches a hub per active region, connects each branch by v-p-n or ExpressRoute to the nearest hub, and lets Microsoft handle inter-hub routing. The alternative — building it by hand with peering and user-defined routes — is months of work and a permanent operational burden.
+
+For small footprints — one or two regions, a handful of virtual networks — Virtual w-a-n is overkill. Classic hub-and-spoke is simpler and cheaper. The crossover is somewhere around five regions or ten branches.
+
+Now, service endpoints versus Private Link. There are two ways to reach an Azure platform-as-a-service — storage, sequel, Key Vault, Cosmos — from a virtual network without traversing the public internet. And the older one is the trap.
+
+Service endpoints extend the virtual network identity to the platform-as-a-service. You enable the endpoint on a subnet and add the subnet's identity to the platform-as-a-service firewall allow-list. Traffic still goes to the public endpoint of the platform-as-a-service — the i-p is public — but the source is recognised as the virtual network. Service endpoints are cheap and simple, but the platform-as-a-service is still publicly reachable from anywhere else.
+
+Private Link, and the private endpoints it creates, gives the platform-as-a-service a private i-p inside your virtual network. You connect to a host name like mystorage dot privatelink dot blob dot core dot windows dot net, which resolves to the private i-p. The public endpoint can then be disabled entirely — the platform-as-a-service is now genuinely private. This is the modern recommendation for any sensitive workload, and the model Microsoft is steering everyone toward.
+
+The d-n-s detail to know: private endpoints need a Private d-n-s zone, named with the privatelink prefix, so that virtual network clients resolve the host name to the private i-p. Automatic integration with Azure Private d-n-s handles this if you let it. Manual d-n-s deployments are where most private-endpoint outages come from. If your application connects but is mysteriously slow, or works inside the virtual network but not from a peered one, suspect d-n-s first.
+
+a-w-s comparison: service endpoints are roughly virtual-private-cloud gateway endpoints. Private Link is roughly a-w-s PrivateLink — the model is virtually identical.
+
+That brings us to the close. A production network for a typical enterprise workload, top down, looks like this.
+
+Address plan. A single organisation-wide r-f-c nineteen-eighteen allocation with slash sixteens per virtual network, and no overlaps.
+
+Hub virtual network. Azure Firewall Premium in the firewall subnet. v-p-n or ExpressRoute Gateway in the gateway subnet. Optional Azure Bastion in its subnet. Private d-n-s resolver for cross-virtual-network name resolution.
+
+Spoke virtual networks. One per workload, peered to the hub, with workload subnets that have network security groups attached and application security groups for app tiers. Delegated subnets for platform-as-a-service virtual network integration.
+
+Egress. A user-defined route sending zero dot zero dot zero dot zero slash zero to Azure Firewall, on every spoke subnet. n-a-t Gateway only when layer seven inspection is not needed.
+
+Hybrid. ExpressRoute as primary, site-to-site v-p-n as backup. Both terminate in the hub gateway.
+
+Platform-as-a-service access. Private Link endpoints in spoke subnets. Private d-n-s zones linked to hub and spoke virtual networks. Service endpoints only on legacy services that do not support Private Link.
+
+And scale. Switch to Virtual w-a-n when you exceed roughly five regions or ten branch sites.
+
+Get this shape right once and you build everything else on top of it for years. The mistakes are paid in pain — overlapping ranges that block peering, network security groups whose effective rules nobody can decode, asymmetric routes that drop production traffic at three a-m. The discipline up front is what avoids them. Traffic management — load balancers, application gateways, Front Door, and d-n-s — comes next.

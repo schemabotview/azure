@@ -1,0 +1,119 @@
+If the previous notebook was about renting hardware, this one is about renting runtimes. Azure's platform-as-a-service and container portfolio takes everything above the operating system — the web server, the language runtime, the orchestrator — and offers it as a managed surface. You bring code, sometimes a container, and Microsoft handles the rest.
+
+The portfolio sits on a continuum. On one end, App Service runs your web app from a git push and hands you a t-l-s-fronted domain in minutes. On the other end, Azure Kubernetes Service gives you a full Kubernetes cluster with raw flexibility, and the operational weight to match. In between are Functions, Container Apps, Container Instances, and the Container Registry that feeds them all. The art is picking the right point on the continuum. Too high a layer and you fight the platform. Too low and you have signed up for ops work you did not want.
+
+Let's start with App Service. Azure App Service runs web apps, r-e-s-t a-p-is, and mobile backends in dot net, java, node, python, p-h-p, and ruby. Every app runs inside an App Service plan — the billing and capacity object. The plan is the virtual machine, or set of virtual machines. The apps are the workloads riding on it. One plan can host many apps, which share its c-p-u and memory.
+
+The tiers, in order of capability. Free and Shared are multi-tenant, no service level agreement, time-quota-d. Use them for demos only.
+
+Basic gives you dedicated virtual machines, manual scale-out, and no deployment slots. It is for development and test.
+
+Standard adds slots — up to five — autoscale, and daily backups. This is the classic production tier.
+
+Premium v-three, with sizes from p-zero-v-three to p-three-v-three, has faster virtual machines, more slots — up to twenty — virtual network integration, and zone redundancy. Most new production workloads land here.
+
+Isolated v-two, which runs inside an App Service Environment v-three, is single-tenant and deployed into your virtual network. Use it for workloads that cannot share a multi-tenant front-end — regulated, ultra-large, or traffic-isolated workloads.
+
+There are two scaling dimensions. Scale up means changing the plan tier or size — bigger virtual machines, more memory, more features. Scaling up is restart-impacting. Scale out means adding more identical instances of the plan, zero-impact when behind the built-in load balancer. Scale out is what your autoscale rules drive.
+
+The a-w-s equivalent is loose. App Service Standard is roughly Elastic Beanstalk. Premium v-three with virtual network integration is roughly Beanstalk in a virtual private cloud. Isolated v-two is roughly Beanstalk in a dedicated v-p-c. The closer analogue to App Service's developer experience is actually a-w-s App Runner.
+
+Now, four App Service features that you will use on essentially every production app. Deployment slots, custom domains and t-l-s, virtual network integration, and Hybrid Connections.
+
+Deployment slots are independent App Service instances that share the plan. You deploy a new version to a staging slot, run smoke tests against the staging hostname, and then swap with production. The swap is near-instantaneous — Azure flips internal d-n-s — and lets you roll back by swapping again. Slot-specific settings — connection strings and app settings that you mark as slot settings — stay pinned, so the swap does not accidentally point staging credentials at production. Slots are the cheapest blue-green deployment you can get on Azure.
+
+Custom domains and t-l-s. Apps get a default hostname under azurewebsites dot net. You add your own through d-n-s c-name or t-x-t validation. App Service then issues and renews free managed t-l-s certificates for verified domains — no Key Vault, no cron job. Bring-your-own certificates are supported when you need an extended-validation cert or a wildcard from a specific certificate authority.
+
+Virtual network integration lets the app reach private resources — an Azure sequel database behind a private endpoint, a Redis cache, an internal a-p-i behind a Private Link — without going through the public internet. Two flavours exist. Regional virtual network integration is the default. The app reaches into a delegated subnet. Gateway-required integration is older, for App Service Environments. Combined with private endpoints on the app itself, you can take the app fully off the public internet — both inbound and outbound — for sensitive workloads.
+
+Hybrid Connections let the app dial back to an on-premises service over a relay. They are useful for migrations where the database is still on-site and the app has already moved.
+
+A typical production deployment workflow on App Service looks like this. Developer pushes to a git branch. Continuous integration runs tests and builds a deployable artifact. The pipeline deploys that artifact to the staging slot, which is already configured with staging app settings. Warmup probes hit the staging slot's health endpoint until it responds. Smoke tests run against the staging hostname. If everything passes, the pipeline swaps staging into production. Real users hit the new code within seconds, and the previous production code is now sitting in the staging slot — ready to swap back if a regression appears in the next ten minutes. That workflow gives you a safe rollback path without writing a single line of deployment automation yourself. It is the practical reason teams pick App Service for new web apps, even when they have the skills to run something more elaborate.
+
+Let's move to Azure Functions — event-driven code. Functions is function-as-a-service. You write a function, you bind it to a trigger and one or more bindings, and Azure runs it on demand. The trigger fires the function — an h-t-t-p request, a queue message, a blob upload, a timer. Bindings inject inputs and accept outputs — read a Cosmos document, write a Service Bus message — without you writing connection code.
+
+Hosting plans determine performance and price.
+
+Consumption is pure pay-per-execution. The function scales from zero to many instances automatically. It is subject to cold starts — sub-second to a few seconds depending on language and dependencies. Consumption is the cheap default for sporadic workloads.
+
+Flex Consumption is the newer tier. It has pre-warmed instances and virtual network integration baked in. It eliminates the cold-start floor without paying for always-on. Use Flex Consumption for new workloads where it is available.
+
+Premium, with the e-p-series s-k-us, gives you pre-warmed instances, virtual network integration, unlimited execution duration, and larger memory. Use Premium for latency-sensitive a-p-is that cannot tolerate cold starts.
+
+Dedicated runs Functions on an existing App Service plan you already pay for. It is best when you have spare capacity.
+
+Durable Functions is an extension for orchestrating long-running, stateful workflows in code. You write an orchestrator function that calls activity functions and awaits their results. The framework persists state to storage at each await, so the orchestrator can run for hours or days, survive restarts, and replay deterministically. Patterns it makes easy include function chaining, fan-out-fan-in, async h-t-t-p polling, and human-interaction — wait for an external event before continuing.
+
+a-w-s comparison: Consumption is roughly Lambda. Premium is roughly Lambda with provisioned concurrency. Durable Functions is roughly Step Functions written as code instead of as a state-machine definition.
+
+A word on cold starts, because that is the topic that derails the most function adoptions. A cold start happens when a request arrives and no warm instance is available. The platform has to allocate a worker, fetch your code, initialise the runtime, run your startup code, and then call your function. The time this takes varies by language. Node and python on Consumption typically cold-start in well under a second. dot net is similar. Java can take several seconds because the j-v-m has to start. Larger dependency trees — heavy n-p-m installs, big python packages like pandas — add seconds because they must be loaded before your code can run.
+
+There are three remedies. Use Flex Consumption or Premium so the platform keeps warm instances available. Keep dependencies lean — split big functions into small ones, only import what you need at startup. And for h-t-t-p endpoints that absolutely cannot tolerate latency, do not run them on Consumption at all — App Service or Container Apps will serve them with consistent latency.
+
+Now, Azure Container Instances — the quickest container. Container Instances runs a single container, or a small group, on demand. There is no cluster, no orchestrator, no node management. You give it an image and a c-p-u and memory size, and it runs. Billing is per second.
+
+What Container Instances is for. Burst capacity for an Azure Kubernetes Service cluster, through the virtual node integration — the cluster schedules pods onto Container Instances when the cluster itself is full. Short-lived batch jobs that do not need a scheduler. c-i build agents spawned by a pipeline that vanish after the job. And quick demos where Kubernetes is overkill.
+
+What Container Instances is not. It is not a long-running web app. There is no autoscale, no load balancer, and no zero-downtime deploy. It is not a microservices platform. There is no service discovery and no orchestration.
+
+a-w-s equivalent: Container Instances is roughly a-w-s Fargate run through the RunTask a-p-i, without the e-c-s cluster wrapper. If you want a fuller managed-container platform, look at Container Apps next.
+
+Let's move to Azure Kubernetes Service. Azure Kubernetes Service is managed Kubernetes. Microsoft runs the control plane — the a-p-i server, the scheduler, e-t-c-d — for free, and bills you for the worker virtual machines. You get an upstream-compatible Kubernetes cluster with Azure-aware integrations — Entra i-d for authentication, Azure container networking for pod networking, Azure Disk and Azure Files for persistent volumes, and Azure Monitor for observability.
+
+Node pools group nodes by virtual machine s-k-u and purpose.
+
+A system node pool runs cluster-critical pods like CoreDNS and metrics-server. At least one system node pool is mandatory. Use a stable, modest s-k-u for it.
+
+User node pools run your workloads. You can have many of them, each on a different virtual machine family. g-p-u nodes for machine learning. Memory-heavy nodes for caches. Spot nodes for cheap batch.
+
+There are two networking modes, and the choice is permanent for a given cluster. Kubenet gives pods private i-p addresses from a separate range, n-a-t-d through the node's i-p. It uses less address space but limits some features. Azure container networking interface gives pods i-p addresses directly from the virtual network subnet. Pods are first-class virtual network citizens — needed for virtual-network-aware security tools — but the model eats subnet space fast. Plan for a slash twenty-two or wider. Azure container networking interface overlay is the newer hybrid: nodes sit on the virtual network, pods on an overlay network. It solves the address-space problem without losing the interface features, and is the new default for large clusters.
+
+Two autoscalers run together in Azure Kubernetes Service. The cluster autoscaler adds and removes nodes when pods cannot be scheduled, or when nodes sit idle. The horizontal pod autoscaler adds and removes pods based on c-p-u, memory, or custom metrics. And keda — the Kubernetes event-driven autoscaler — extends the horizontal pod autoscaler to scale on external signals: Service Bus queue depth, Event Hubs lag, Kafka offset, even cron schedules. keda is built into Azure Kubernetes Service and is what enables scale-to-zero patterns in Kubernetes.
+
+Ingress comes from add-ons. The cluster-managed application routing add-on, which runs nginx under the hood. Or Application Gateway Ingress Controller, if you want the layer seven web application firewall in front. Both work. The Application Gateway controller offloads the data plane to a managed Azure resource.
+
+Azure Kubernetes Service pulls in real operational weight. Kubernetes upgrades every few months. Certificate rotation. Node operating system patching, which is only semi-managed through node-image upgrades. Role-based access control binding between Entra i-d and Kubernetes' own role model. Reach for Azure Kubernetes Service when you need its flexibility. Default to Container Apps if you do not.
+
+To make the operational weight concrete, consider a typical Kubernetes year. Microsoft supports the last three minor versions of Kubernetes — currently something like one-twenty-eight, one-twenty-nine, one-thirty. A new minor lands every few months, and the oldest supported version drops off. That means you are upgrading the cluster's control plane and node pools once a quarter, every quarter, just to stay supported. Each upgrade needs a maintenance window, application compatibility testing, and a rollback plan in case something in your workloads relies on a deprecated a-p-i. Add ingress certificate rotation, periodic credential rotation, monitoring on cluster autoscaler events, and capacity planning across node pools. None of this exists on App Service or Container Apps. That is the operational tax Kubernetes asks you to pay, and the question for any new workload is whether the flexibility justifies it.
+
+Now, Container Apps — Kubernetes without the cluster. Azure Container Apps is the serverless container platform: scale-to-zero, keda-driven autoscale, traffic-splitting between revisions, and built-in Dapr — all without you ever seeing the underlying Kubernetes.
+
+The model has three pieces. A Container App Environment is the trust and networking boundary — one virtual network, one Log Analytics workspace. Multiple Container Apps share it. A Container App is a service: a container image, scale rules, ingress config, and revisions, which are immutable snapshots of the config. You can split traffic ninety-ten across revisions for blue-green or canary deployment. Scale rules speak keda: scale on h-t-t-p concurrency, queue depth, a custom metric, or cron. Scale to zero when idle — you pay nothing until the next request arrives.
+
+Dapr sidecars are first-class. Set the Dapr-enabled flag to true and you get service invocation, publish-subscribe, state store, and bindings with zero infrastructure setup. That is a real productivity bump for microservices that would otherwise wire each integration by hand.
+
+The trade-off versus Azure Kubernetes Service is less control. You do not get to write raw Kubernetes manifests. You cannot run privileged sidecars. You cannot tune the kubelet. The trade-off versus App Service is that you ship containers, not buildpacks. You give up the language-runtime conveniences, but you get to ship any image.
+
+Container Apps is the right default for new microservices today. Drop down to Azure Kubernetes Service only when a specific Kubernetes feature forces you there.
+
+Concretely, picture an event-driven order processor. It receives messages from a Service Bus queue, validates them, calls a payment a-p-i, and writes the result to a database. On Container Apps you describe a single application: the image, a Service Bus scale rule with a target queue length of ten, minimum of zero replicas, maximum of fifty. When the queue is empty, your application costs zero. When two thousand messages arrive, the platform spins up fifty replicas within a minute, drains the queue, and scales back down. You did not write a scheduler, you did not run a cluster, you did not even configure a load balancer. That is the value of getting Kubernetes-style autoscale on a serverless surface.
+
+a-w-s comparison: Container Apps is roughly e-c-s Fargate plus CodeDeploy traffic shifting, with Dapr as the value-add.
+
+Next, Azure Container Registry. Azure Container Registry is the o-c-i registry. Three tiers.
+
+Basic is single region, for development and test. Standard is production-grade, with higher throughput and storage. Premium adds geo-replication — multi-region replicas under one logical name — content trust for signed images, private endpoints, customer-managed encryption keys, and tasks for building, testing, and patching images on a schedule or on git push.
+
+Two features earn their keep in real deployments.
+
+Geo-replication. You push once to a single registry name, and you get pull-local-fast in every replicated region. Kubernetes clusters in different regions pull from the nearest replica automatically. Premium tier only.
+
+Container Registry Tasks. They run docker build in the cloud on a git push, or on a schedule. The killer pattern is base-image update tasks. When Microsoft publishes a new patched runtime image, the task rebuilds every downstream image that uses it as a base, and re-pushes. Your fleet stays patched without anyone touching a Dockerfile by hand.
+
+Authentication for Kubernetes and Container Apps to pull from the registry is best done with a managed identity and the Acr-Pull role — no admin user, no credentials sitting in pipelines.
+
+Finally, choosing the right surface. The portfolio looks crowded until you map it to a decision tree, which I will describe in prose so you can keep it in your head.
+
+Start with the question: is the workload event-driven, short-lived, and happy with cold starts? If yes, use Functions — Consumption or Flex Consumption.
+
+Otherwise: is it a web app or r-e-s-t a-p-i in a supported runtime, with no special container needs? If yes, use App Service.
+
+Otherwise: is it a containerised microservice that should scale to zero and might use Dapr? If yes, use Container Apps.
+
+Otherwise: do you need raw Kubernetes — operators, custom resource definitions, daemon sets, privileged sidecars, hand-tuned scheduling? If yes, use Azure Kubernetes Service.
+
+And finally: a one-off container, a batch job, or a burst node for an Azure Kubernetes Service cluster? If yes, use Container Instances.
+
+The mistake everyone makes once is reaching for Azure Kubernetes Service for a three-service application. The cluster is real ops work, and the savings on managed runtimes — App Service, Container Apps, Functions — come from not paying that operational tax. Treat Azure Kubernetes Service as the high-ceiling default for platforms big enough to amortise the cluster, and let the smaller patterns sit on the lighter surfaces above it.
+
+Storage comes next.

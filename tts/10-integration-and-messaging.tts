@@ -1,0 +1,137 @@
+The moment you have more than one service, you need a way for them to talk that is not — call me synchronously and hope I am up. Azure has three distinct messaging products plus two integration services, and confusing them is the most common architecture mistake in the platform.
+
+The three messengers — Service Bus, Event Grid, Event Hubs — look similar from a distance and are deeply different up close. The other two — Logic Apps and a-p-i Management — sit on top. Logic Apps as the no-code workflow runner. a-p-i Management as the a-p-i gateway. Together they cover the full integration story, from per-message reliability up to public a-p-i exposure.
+
+Let's start with Azure Service Bus — enterprise messaging. Service Bus is the classic enterprise message broker. a-m-q-p protocol, fifo ordering, sessions, transactions, dead-letter queues, duplicate detection. It is what you reach for when each message represents a unit of work that must be reliably processed exactly once, in order, with no loss.
+
+Two messaging primitives.
+
+Queues are point-to-point. One producer, or several, writes. One consumer, or a competing-consumer pool, reads. Each message goes to exactly one receiver.
+
+Topics and subscriptions are publish-subscribe. Producers publish to a topic. Multiple subscriptions filter and receive their own copy. Each subscription is, behind the scenes, a queue with filter rules.
+
+Features that matter for real workloads.
+
+Peek-lock receive. The receiver locks the message for a configurable duration, completes it on success, and abandons it on failure. This is the default behaviour, and it gives you at-least-once semantics.
+
+Sessions. Group messages by a session i-d so one consumer processes them in order. This is the Service-Bus way to do per-key fifo ordering.
+
+Dead-letter queue, often shortened to d-l-q. Every queue has a sibling dead-letter queue. Messages that fail delivery n times, or that you explicitly dead-letter, land there. You inspect, fix, and re-enqueue them.
+
+Duplicate detection. Based on message i-d, for a configurable window. Duplicate detection eliminates the sender-retried-now-we-have-two problem at the broker level.
+
+Scheduled enqueue. Drop a message that only becomes visible at a future time.
+
+Transactions. Atomic send and receive across multiple entities — queue plus topic — within the same namespace.
+
+Three tiers. Basic is queues only, with no topics. Standard is the full feature set on shared infrastructure. Premium gives you dedicated capacity, predictable latency, geo-disaster-recovery, and virtual network integration. Premium is the production tier for anything important.
+
+a-w-s comparison: Service Bus is roughly s-q-s, for queues, plus s-n-s, for topics, merged into one product with stronger ordering and transactional guarantees.
+
+A concrete example will sharpen the picture. Imagine you are processing orders. Each order arrives as a message. The worker picks up the message under peek-lock, charges the customer's card, writes the order to the database, and only then completes the message. If anything fails in the middle, the worker abandons the message; the broker hands it to another worker, up to the maximum delivery count. After that many failures, the message lands in the dead-letter queue with the exception details, and an alert fires. The order never silently disappears. The customer is never charged twice. A human can inspect the dead-letter queue, fix whatever went wrong — a missing row in a lookup table, a bad encoding — and replay the message. That reliability story is exactly the kind of thing you cannot build cheaply on top of a fire-and-forget event bus. It is what Service Bus is for.
+
+Now, Azure Event Grid — publish-subscribe for system events. Event Grid is the push-based, lightweight event router. It is built for reactive scenarios: when a blob is uploaded, run this function. When a resource is created, notify Logic Apps. When a custom event fires, fan it out to four subscribers.
+
+The architecture is push, not pull. Subscribers register a webhook — a function, a Logic App, an Event Hub, a Service Bus queue, or a custom https endpoint — and Event Grid posts events to it, with retry and exponential backoff. Filtering happens at the subscription, by subject, event type, or advanced property filters.
+
+Three sources of events.
+
+System topics. Azure resources publish events automatically — storage blob created or deleted, Key Vault secret expiring, resource group resource created. You subscribe and react.
+
+Custom topics. You publish your own events — order created, user registered.
+
+Domains. Multi-tenant custom topic management. One publishing endpoint, per-tenant subscriptions.
+
+Two event schemas. Event Grid schema is the original. CloudEvents version one point zero is the c-n-c-f standard, and recommended for portability.
+
+Event Grid is for event notifications, not durable work queues. Each event is small — up to sixty-four kilobytes. The goal is fast fan-out with at-least-once delivery, and failed deliveries dead-letter to a storage account if you configure it.
+
+If a message represents work that must complete, use Service Bus instead. If it represents — something happened, react if you want — Event Grid is the fit.
+
+a-w-s comparison: Event Grid is roughly EventBridge. The model — system events plus custom events plus filtered subscriptions — is virtually identical.
+
+Now, Azure Event Hubs — big-data streaming. Event Hubs is the high-throughput, append-only event ingestion service. Think millions of events per second from devices, clickstreams, or logs, into one durable stream that downstream processors read at their own pace.
+
+The model is a partitioned log, deeply Kafka-like.
+
+Partitions. Fixed at create time — one to thirty-two for Standard, more for Premium and Dedicated. Throughput scales with partition count. Each event lands on exactly one partition, picked by a partition key for ordering, or round-robin for spread.
+
+Consumer groups. Each consumer group reads the full stream independently with its own offset. Five per Standard tier, twenty per Premium.
+
+Throughput units, on Standard, or processing units, on Premium, are capacity blocks. One throughput unit gives you one megabyte per second ingress, two megabytes per second egress. Premium uses processing units, and Dedicated tier is single-tenant clusters.
+
+Capture. The platform streams the events into Data Lake Storage gen-two, or into a blob container, automatically. No consumer code needed for the archive-everything-to-the-lake pattern. That feature alone justifies Event Hubs in many designs.
+
+Kafka surface. Event Hubs speaks the Kafka one point zero or higher protocol on a different endpoint, so Kafka producers and consumers work unchanged. That is the most common reason to choose Event Hubs over Service Bus for a streaming workload.
+
+Event Hubs retains events for a configurable window — one to ninety days on Premium. Consumers track their own offsets. There is no concept of the event was processed at the broker level. If you need acknowledgment-per-message semantics, Service Bus is the right tool, not Event Hubs.
+
+a-w-s comparison: Event Hubs is roughly Kinesis Data Streams plus m-s-k in one product. Capture is roughly Kinesis Firehose.
+
+A common workload that pulls Event Hubs in is internet-of-things telemetry. Imagine a fleet of fifty thousand devices, each sending a heartbeat and a sensor reading every ten seconds. That is five thousand events per second, sustained, with bursts. A queue would be the wrong shape entirely — the throughput is too high and there is no concept of acknowledging each heartbeat individually. Instead, every device sends to an Event Hub. Capture writes each batch to the data lake automatically. A Stream Analytics job watches the live stream for anomalies and pushes alerts to Service Bus when one is detected. The lake fills with cheap parquet that machine-learning models train on later. The fast path and the slow path are separated by the design of the broker, not by application code, which is the kind of leverage you get from picking the right primitive.
+
+Let's pull this together. Choosing between Service Bus, Event Grid, and Event Hubs. The picking rule, in plain language.
+
+If you need a reliable command or work queue with order and retries, use Service Bus.
+
+If you need reactive notification of system or business events, use Event Grid.
+
+If you need high-volume telemetry, log, or clickstream ingestion, use Event Hubs.
+
+Three questions help you decide.
+
+Is each message a unit of work that must complete exactly-or-at-least-once? If yes, Service Bus.
+
+Is each event a notification, and do you have several subscribers each doing something different? If yes, Event Grid.
+
+Is the volume millions per second, and order or throughput matter more than per-message reliability? If yes, Event Hubs.
+
+Real systems combine them. A typical pattern. Clickstream events flow into Event Hubs for analytics. Key events fan out through Event Grid to downstream services. One of those services is an order processor that pushes durable work onto a Service Bus queue for the warehouse. Each product earns its keep at its layer, and the integration architecture stays clean.
+
+Now, Azure Logic Apps. Logic Apps is the no-code workflow runner. Drag-and-drop triggers and actions wired through a graphical designer, with hundreds of pre-built connectors to Microsoft and software-as-a-service systems — s-a-p, Salesforce, Office three sixty five, Twilio, sequel, Outlook.
+
+Two hosting models. Consumption is multi-tenant, per-action billing, no infrastructure to manage. Cold starts in seconds. Standard is single-tenant, runs on App Service plans — including inside your virtual network — with local development in vs code, and multiple workflows per app. Standard is the production default for anything serious.
+
+What Logic Apps does well. Business-to-business integration with e-d-i, a-s-two, and x-twelve, through an Integration Account. Software-as-a-service-to-software-as-a-service orchestration. The when-an-email-arrives-with-a-pdf-attachment-o-c-r-it-validate-it-log-to-SharePoint style of workflow that would otherwise be a small developer project.
+
+What Logic Apps does not do well. High-throughput, low-latency message processing — that is Functions, Service Bus, and Event Hubs territory. Logic Apps is the integration glue between systems, not the data plane.
+
+a-w-s comparison: Logic Apps is roughly Step Functions plus EventBridge Pipes plus AppFlow, with a much richer connector library and a graphical designer.
+
+Next, Azure a-p-i Management. a-p-i Management — usually shortened to a-p-i-m — is the a-p-i gateway. A managed front-door for your h-t-t-p a-p-is that handles authentication, rate limiting, transformation, caching, mocking, and developer portal exposure.
+
+Three customer-facing concepts.
+
+a-p-is are the operations you import, from OpenAPI, w-s-d-l, App Service, Function App, Logic App, g-r-p-c, or GraphQL.
+
+Products are bundles of a-p-is you subscribe consumers to. Each subscription gets its own key. Products carry per-product rate limits.
+
+Policies are x-m-l snippets that run on every request. Validate a j-w-t. Rewrite the u-r-l. Add cors headers. Cache for sixty seconds. Mock the response when the backend is down. Return a different service-level-agreement tier to different products. The policy domain-specific language is a-p-i Management's superpower.
+
+Three s-k-u shapes to know. Consumption is serverless, per-call billing, no virtual network, and limited features. Good for hobby a-p-is.
+
+The provisioned tiers are Developer, Basic, Standard, and Premium. Premium adds virtual network integration, multi-region deployment, self-hosted gateway, and zone redundancy.
+
+And Standard v-two and Premium v-two are newer s-k-us with better cost-to-feature ratios. Standard v-two now has virtual network support. Prefer v-two s-k-us for new deployments.
+
+Self-hosted gateway is a container you run in your data center, or in another cloud, that registers back to your a-p-i Management instance. Useful for hybrid scenarios where the backend is on-premises, and you do not want traffic crossing the public internet to a-p-i Management and back.
+
+The developer portal is an auto-generated, customisable site that publishes your a-p-is, lets consumers sign up, and gives them a subscription key. For external a-p-i products, that removes weeks of build-a-portal work.
+
+a-w-s comparison: a-p-i Management is roughly a-p-i Gateway plus parts of a-w-s Cognito — for subscription keys — plus a developer portal that a-w-s does not really provide.
+
+That brings us to the close. A typical event-driven Azure architecture, layered top to bottom, looks like this.
+
+Public a-p-is are fronted by a-p-i Management, behind Front Door, with j-w-t validation, rate limits per product, and request and response transformation policies.
+
+Synchronous calls. a-p-i Management forwards to App Service, Container Apps, Azure Kubernetes Service, or Functions, which serve the request directly.
+
+Reactive fan-out. Those services publish business events to Event Grid custom topics. Downstream services subscribe to the events they care about. Notifications, audit logs, and search index updates all fall out of this pattern naturally.
+
+Durable work. When an event triggers a unit of work that must complete — charge a card, ship an order, send a contract — it is enqueued on Service Bus. Workers run in Functions, Container Apps, or Azure Kubernetes Service, with dead-letter queues and retries handled by the broker.
+
+Telemetry and streams. Clickstream, internet-of-things, and logs flow into Event Hubs, which both captures to Data Lake Storage gen-two for analytics and exposes the stream to Stream Analytics or Spark for processing.
+
+And workflows. Anything human-in-the-loop, business-to-business electronic data interchange, or software-as-a-service-to-software-as-a-service orchestration runs in Logic Apps Standard.
+
+That stack covers most enterprise integration without anyone reaching for an enterprise service bus or rolling their own messaging. The discipline is keeping each tier to its proper job. Service Bus carries work. Event Grid notifies. Event Hubs streams. Logic Apps glues. a-p-i Management fronts. The four nouns are different on purpose. Security services come next.

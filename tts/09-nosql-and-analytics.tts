@@ -1,0 +1,145 @@
+Relational engines handle the transactional core of most workloads, but they are not the right shape for every kind of data. Globally-distributed document state. Multi-petabyte data lakes. Telemetry streams. Graph traversals. Each one has its own engine on Azure.
+
+This notebook covers them. Cosmos d-b for operational no-sequel at planet scale. Synapse Analytics and Azure Databricks for the analytics tier. Data Factory for the orchestration glue. And the supporting characters — Table Storage, HDInsight, Stream Analytics, and Microsoft Fabric — for context.
+
+The pattern most large workloads end up with looks like this. Cosmos d-b or Azure sequel on the operational side. Change feed or change-data-capture pumping into Azure Data Lake Storage gen-two. Databricks or Synapse Spark crunching the lake. And a serverless sequel surface, or Power b-i, reading the results. Knowing where each engine fits keeps you from forcing the wrong tool on a workload it cannot actually handle.
+
+Let's start with Azure Cosmos d-b — the planet-scale no-sequel database. Cosmos d-b is Microsoft's globally-distributed, multi-model no-sequel database. The same underlying engine speaks five wire-compatible a-p-is, and you pick one at create time.
+
+The NoSQL core a-p-i is Cosmos's native j-s-o-n document a-p-i. Most features land here first. Pick it for greenfield.
+
+The MongoDB a-p-i is wire-compatible with MongoDB drivers. It does not support every Mongo feature, but enough for most applications. Use it to lift-and-shift Mongo workloads.
+
+The Cassandra a-p-i has c-q-l wire compatibility. Same migration story for Cassandra.
+
+The Gremlin a-p-i supports graph traversals over a property graph. For social graphs, knowledge graphs, fraud rings.
+
+And the Table a-p-i is wire-compatible with Azure Table Storage, but with Cosmos's service-level agreements and global distribution.
+
+Cosmos guarantees per-region single-digit-millisecond p-ninety-nine reads and writes, ninety-nine point nine-nine-nine percent availability with multi-region writes, and explicit consistency level controls. Microsoft prices it through the request unit abstraction — usually shortened to r-u. Every operation costs some number of request units, and you provision request units per second of capacity, or you use autoscale or serverless.
+
+a-w-s comparison. NoSQL core is roughly DynamoDB, but with consistency-level knobs DynamoDB does not expose. The Mongo a-p-i is roughly DocumentDB. The Cassandra a-p-i is roughly Keyspaces.
+
+Now, partition keys and request units — the two design decisions that decide whether Cosmos is brilliant or unusable.
+
+Cosmos shards every container by a partition key you choose at create time. A good partition key has three properties.
+
+High cardinality. Many distinct values, so the keyspace can split into many physical partitions.
+
+Even access. No single value is hot. A tenant i-d is fine if tenants are roughly balanced. It is bad if ninety percent of traffic is one tenant.
+
+Co-locates queries. The values that you commonly read or transact together share a partition key. Cross-partition queries fan out and cost more request units.
+
+The classic disaster pattern is picking a low-cardinality field — a status enum, a region code — as the partition key. Every write to that value lands on the same physical partition, which has a hard throughput ceiling. You hit a wall regardless of how many request units you provision. That is the most common Cosmos performance bug, and it traces back to partition key choice every time.
+
+The request unit model prices every operation. A point read of a one-kilobyte document costs about one request unit. A query that scans a hundred documents costs about ten request units. An indexed insert costs about five to ten request units. You provision throughput at the container or database level in one of three modes.
+
+Standard manual provisioning gives you a flat number of request units per second. Autoscale lets you set a maximum number, and Cosmos scales between ten percent and one hundred percent of it automatically. Autoscale is slightly more expensive per request unit, but it covers spiky workloads cleanly. Serverless is pay per request, no provisioned floor, capped at modest throughput, and good for development, test, and sporadic workloads.
+
+Watch the diagnostic logs for rate-limited responses — that is the four-twenty-nine status code — and the request charge on every query. Those two metrics are how you tune request-unit spend down once the workload is live.
+
+Now, consistency levels. Cosmos exposes five consistency levels, in order from strictest to loosest.
+
+Strong is linearisable. Reads always see the latest committed write. Highest latency. Only available in a single region, or in multi-region without multi-write.
+
+Bounded staleness means reads lag the write by at most k updates or t time. Predictable, ordered, used for global applications that need consistency budgets.
+
+Session is the default. A client sees its own writes immediately. Other clients may lag briefly. The right choice for most user-scoped workloads.
+
+Consistent prefix means reads see writes in order, but may lag. They never see a write out of sequence.
+
+Eventual is the cheapest and lowest latency. Reads may show old data, and may show writes out of order for a window.
+
+Looser consistency costs fewer request units and gives lower latency. The picking rule: start with session unless a workload requirement forces stricter. Tighten only on the containers that need it.
+
+a-w-s comparison. DynamoDB only exposes strongly-consistent and eventually-consistent reads. Cosmos's five-level menu is genuinely more nuanced — useful when you need it, more decisions when you do not.
+
+Let's move to global distribution and multi-region writes. A Cosmos account is provisioned in a home region. You can add read regions with a click — Cosmos replicates the data and serves local reads. Failover is automatic. You keep the same connection string throughout.
+
+Flip multi-region writes on, and every region becomes write-capable. The trade-off looks like this.
+
+Single-write region. One region is authoritative. The others are read replicas. Conflict-free, slightly cheaper, with strong and bounded-staleness consistency available.
+
+Multi-write region. Every region accepts writes. Cosmos resolves write conflicts. The default policy is last-writer-wins on a configurable field. The alternative is a stored procedure you write yourself. Multi-write is required for sub-millisecond write latency at every region.
+
+Change feed is the change-data-capture log on every container. Subscribers — a Function trigger, the Synapse Link integration, a custom worker — consume the feed in order and react. Change feed is the canonical way to fan data from Cosmos out to other systems. Pump it into the data lake for analytics. Trigger search index updates. Propagate to a Service Bus topic. Most production Cosmos deployments use change feed somewhere.
+
+Concretely, picture a retail order system. New orders land in a Cosmos container partitioned by tenant. A Function App is subscribed to the change feed. For every new order, the function fans the document out to three places — an Event Grid topic that downstream notification services subscribe to, a Search index that keeps the order browsable in near real time, and the data lake for analytics. None of that fan-out logic lives in the order-creation code. It happens reactively, off the change feed, and survives if any downstream system is briefly unavailable. That is the pattern that lets you compose an event-driven architecture around an operational store, without bolting on a separate event bus.
+
+Next, Azure Table Storage — and when not to use it. Azure Table Storage is the original Azure no-sequel — a flat key-value store inside a storage account. Two-part key — partition key plus row key — no schema, no secondary indexes, no joins.
+
+Table Storage is cheap and durable. It is also feature-anaemic compared to anything modern. The current advice is: pick the Cosmos d-b Table a-p-i instead for any new workload. Same wire protocol, same client code, but with global distribution, throughput service-level agreement, and secondary indexes. Table Storage remains useful for very simple logging or metadata sidecar scenarios where Cosmos's request-unit cost is overkill — but treat it as a corner case, not a default.
+
+Now, Azure Synapse Analytics. Synapse is Microsoft's analytics platform — three compute engines plus an orchestration layer in one workspace.
+
+Dedicated sequel pools, formerly called sequel Data Warehouse, are a massively parallel processing columnar warehouse. You provision a fixed number of data warehouse units, and you pay for the pool whether queries run or not. Use dedicated pools for terabyte-to-petabyte structured warehouses queried by business intelligence.
+
+Serverless sequel pools are pay per terabyte scanned across files in the data lake. No provisioning. You query parquet, c-s-v, or j-s-o-n directly in the lake. Perfect for ad-hoc analysis and data-engineering inspection.
+
+Apache Spark pools are fully managed Spark clusters supporting PySpark, Scala, dot net for Spark, and r. Autoscale and auto-pause. Used for transformations and machine learning feature engineering on the lake.
+
+Pipelines are the built-in Azure Data Factory experience for orchestration, embedded inside Synapse.
+
+Synapse Link is the headline integration — a managed change-feed pipe from Cosmos d-b, Azure sequel, or Dataverse, into Synapse, with no e-t-l to write. You query operational data analytically without affecting the operational workload.
+
+Microsoft's longer-term direction is Microsoft Fabric, which folds Synapse Spark, Data Factory, Power b-i, real-time intelligence, and lakehouse storage — called OneLake — into one software-as-a-service surface. Fabric is the recommended platform for new analytics builds going forward. Synapse remains supported, and is the right place for existing deployments.
+
+Let's move to Azure Data Factory. Data Factory is the no-code-to-low-code extract-transform-load and extract-load-transform orchestration service. The same engine sits inside Synapse Pipelines and Fabric Data Factory. Standalone Data Factory is still what most non-Fabric analytics builds use.
+
+Four core concepts.
+
+Linked services are connection strings to data stores and compute — a Storage account, a sequel database, a Databricks workspace, a software-as-a-service source.
+
+Datasets are typed pointers at locations within a linked service — a specific table, a folder of c-s-v files.
+
+Pipelines are orchestrations of activities — Copy, Lookup, ForEach, Web call, Stored Procedure, Databricks notebook, Mapping Data Flow.
+
+Triggers fire pipelines on a schedule, on a tumbling window, or on an event — for example, a blob landing in a container.
+
+Mapping Data Flows are no-code, Spark-backed transformations. You draw a directed acyclic graph — select, join, derive column, sink — and Data Factory runs it on a managed Spark cluster.
+
+Integration runtimes are where activities actually execute. Azure integration runtime is managed compute in a region, for Azure-to-Azure activities. Self-hosted integration runtime is an agent you install on a virtual machine in your network — on-premises, or inside a virtual network — for hybrid sources. And Azure ssis integration runtime runs legacy ssis packages lifted from on-premises sequel server.
+
+a-w-s comparison: Data Factory is roughly a-w-s Glue plus Step Functions plus Data Pipeline. The low-code visual experience is Azure's selling point. Glue is more code-first.
+
+Next, Azure Databricks. Databricks is the Databricks lakehouse platform deployed on Azure with first-party billing through Microsoft. It is the gold standard for serious data engineering, machine learning, and lakehouse analytics — and a frequent alternative to Synapse Spark for shops that have made the Databricks bet.
+
+The core abstractions. A workspace is the user interface plus the management plane. Clusters are Spark clusters — interactive, job, or serverless. They autoscale and spin down when idle. Delta Lake provides acid transactions over parquet in your storage. It is the format every cluster reads.
+
+Unity Catalog is the central metastore, governance, lineage, and access control across workspaces and clouds. It replaces the legacy Hive metastore, and Microsoft's clear direction is Unity-everywhere for new builds.
+
+MLflow is built-in experiment tracking and model registry.
+
+Databricks versus Synapse Spark. Databricks has the longer pedigree, the deeper feature set, the photon execution engine, Unity Catalog, and Mosaic m-l. Synapse Spark is integrated tightly with the rest of Synapse. For pure data engineering and machine learning platforms at scale, Databricks usually wins. For tight Power b-i and Fabric integration, Synapse or Fabric does.
+
+The pragmatic decision is often not technical at all. It is about which platform your data team already knows, and which one the rest of the organisation's analytics stack converges on. If your business intelligence team lives in Power b-i and your warehouse is in Synapse, putting Spark in Databricks adds a separate billing relationship, a separate catalog, and a separate identity model. If your data engineers came from Databricks shops, putting Spark in Synapse means relearning years of operational habits. Either choice is a defensible platform. The cost of switching mid-flight is what makes the decision sticky, so make it deliberately the first time.
+
+Now, three more analytics services you should recognise but rarely greenfield onto.
+
+Azure HDInsight is managed Hadoop, Spark, Kafka, h-base, and Storm clusters on virtual machines. The original Azure big-data offering. It is largely supplanted by Databricks, Synapse, and Container-Apps-hosted Kafka clones. It is still alive for workloads needing a specific Hortonworks-compatible distribution.
+
+Azure Stream Analytics is a fully-managed real-time sequel engine over Event Hubs and IoT Hub streams. Write sequel with windowing — tumbling, hopping, sliding — join with reference data, output to Power b-i, Synapse, or Cosmos. It is beautiful for simple stream pipelines without the operational weight of Spark Structured Streaming.
+
+Microsoft Fabric Real-Time Intelligence is the newer event-streaming surface in Fabric, built on the k-q-l engine. Where new streaming analytics builds will land going forward.
+
+a-w-s comparison. HDInsight is roughly e-m-r, with the same why-am-i-still-running-this energy lately. Stream Analytics is roughly Kinesis Data Analytics. Real-Time Intelligence is roughly m-s-k plus OpenSearch plus Glue Streaming, combined.
+
+That brings us to the close. The shape of a modern Azure data platform is layered.
+
+The operational store. Azure sequel for relational and Cosmos d-b for no-sequel hold live application state.
+
+Change capture. Cosmos's change feed, Azure sequel's change-data-capture, or PostgreSQL logical decoding pumps every change into the lake.
+
+The lake. Azure Data Lake Storage gen-two is the durable, cheap home for raw and curated data. Delta tables or Iceberg tables on top give acid semantics.
+
+Compute. Azure Databricks for lakehouse-first shops, or Synapse Spark and Fabric for Microsoft-stack-first shops, transforms and aggregates.
+
+Serving. Synapse Serverless sequel, or Fabric Lakehouse sequel endpoint, exposes curated tables to business intelligence. Power b-i, or Fabric reports, query them.
+
+Orchestration. Azure Data Factory or Synapse and Fabric Pipelines wires the schedule, dependencies, and monitoring.
+
+And streaming, if needed. Event Hubs ingests. Stream Analytics or Fabric Real-Time Intelligence processes. Output goes back into the lake or onto a Power b-i dashboard.
+
+The art is matching the engine to the access pattern. Hot, point-lookup, globally-distributed j-s-o-n goes to Cosmos. Big columnar warehouse queries go to Synapse dedicated, or Fabric Warehouse. Spark transformations go to Databricks. Cheap ad-hoc inspection over the lake goes to Synapse Serverless sequel.
+
+Pick one engine per access pattern, and the platform stays sane. Try to make one engine cover all four, and you spend the next year explaining why queries take five minutes. Integration and messaging come next.

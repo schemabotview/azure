@@ -1,0 +1,111 @@
+Azure is a platform of about two hundred services running across roughly sixty regions worldwide. To learn it well, you do not start with the services. You start with the shape of the platform itself: how cloud computing differs from running your own servers, how Microsoft splits responsibility with you, how every resource you create slots into a hierarchy that controls billing and access, and how that hierarchy spans Microsoft's global network of regions and zones.
+
+Get this skeleton right, and every later service — virtual machines, storage accounts, databases, Kubernetes clusters — drops cleanly onto it.
+
+Let's start with the three classic cloud service models. They trade control for convenience.
+
+The first is infrastructure as a service. You rent virtual hardware and run everything above it yourself. In Azure, that is virtual machines, virtual networks, and managed disks. You pick the operating system, patch it, install your runtime, manage the firewall. You are buying flexibility — anything you can run on a server, you can run here. The a-w-s equivalent is e-c-two for compute, v-p-c for the network, and e-b-s for disks.
+
+The second is platform as a service. You hand over the operating system and the runtime; you bring code and config. App Service runs your web app, Azure Functions runs event handlers, Azure sequel database runs the database engine. Microsoft patches the host, scales the underlying compute, handles failover. You give up the ability to s-s-h into a box; you get back hours every week. The a-w-s equivalent is Elastic Beanstalk for web apps, Lambda for functions, and r-d-s for managed databases.
+
+The third is software as a service. Pure consumption: Microsoft three sixty five, Dynamics three sixty five, GitHub itself. You do not see infrastructure; you sign in. a-w-s does not have a strong software as a service portfolio. Microsoft does, and that historical strength shapes how Azure markets itself.
+
+The practical rule when designing a system is to start with the most managed option that fits. Reach for infrastructure as a service only when platform as a service cannot give you the control you need. Every step down the stack is a step toward more knobs and more two a-m pages. To put it concretely, if you are building a typical web a-p-i, default to App Service or Container Apps. Move to a virtual machine only when you need a kernel module, a specific operating system version, or a legacy installer that platform as a service will not run.
+
+The boundaries are not always sharp. Some Azure services straddle two categories. Azure Kubernetes Service, for example, is platform as a service in the sense that Microsoft manages the control plane for free, but the worker nodes are virtual machines that you are responsible for keeping patched. Azure sequel managed instance is platform as a service, but it gives you almost the full sequel server surface so you can lift and shift legacy databases. The classification is less important than the responsibility split, which is what we look at next.
+
+Now, shared responsibility. Cloud security is not Microsoft handles it. It is a split, and the split shifts depending on the service model. In infrastructure as a service, you own everything inside the virtual machine: the operating system, the patches, the application, the data, the identity used to log in. Microsoft owns the physical host, the hypervisor, the network fabric, and the building. In platform as a service, Microsoft absorbs the operating system and runtime layer; you still own your code, your data, and your identity configuration. In software as a service, almost everything is Microsoft's responsibility except your data and your users.
+
+Picture a stack of layers. At the bottom, the physical host and the virtualization layer — those are always Microsoft. Above them, the runtime and operating system, which Microsoft owns in platform and software as a service, but you own in infrastructure as a service. Above that, the application, which Microsoft handles only in software as a service. And on top, data and access — always yours, every model, every service.
+
+That is the rule worth memorising. Your data, and the identities you grant access to it, never leave your side regardless of how managed the platform becomes. That is why identity, through Entra i-d, and data classification land first in any Azure security review. If you leak a storage account key or misconfigure a conditional access policy, no amount of Microsoft patching saves you.
+
+A concrete example helps. Imagine a critical operating system vulnerability lands on Tuesday morning. If your application is running on a virtual machine — infrastructure as a service — your on-call engineer is patching guests this week. If it is running on App Service — platform as a service — Microsoft is rolling the underlying host fleet, and you are mostly watching dashboards. If it is Microsoft three sixty five — software as a service — you may not even hear about it until the post-incident report. Same vulnerability, three different operational stories, all driven by which model you chose.
+
+Let's move on to Azure Resource Manager — the control plane that ties everything together.
+
+Every action you take in Azure — clicking in the portal, running the Azure command line interface, calling a Python s-d-k, applying a Bicep template — funnels through one a-p-i: Azure Resource Manager, or a-r-m. a-r-m is the single entry point. It authenticates the request, checks role-based access control, validates against Azure Policy, and finally tells the resource provider — Compute, Storage, Network, and so on — to do the work.
+
+A few consequences fall out of having one control plane.
+
+First: anything you can do in the portal, you can do via a-p-i. No portal-only features. The Activity Log captures every a-r-m call regardless of source — portal, command line, s-d-k, or template — so you get a complete audit trail for free.
+
+Second: templates are first-class. Because the a-p-i speaks declarative json, you can describe an entire environment as a file — an a-r-m template, or its friendlier sibling Bicep — and apply it idempotently. Run it once, you get the environment. Run it again, nothing changes. That is the property infrastructure as code lives or dies on.
+
+Third: role-based access control and policy intercept every call before the resource provider sees it. That makes governance enforceable, not advisory. You cannot accidentally create a virtual machine in a forbidden region if policy denies it at the chokepoint.
+
+a-r-m is the analogue of a-w-s's CloudFormation, i-a-m evaluator, and a-p-i surface rolled into one. The cleaner abstraction is one of Azure's quiet strengths. In a-w-s, the a-p-i, the policy engine, and the templating story evolved at different times and feel slightly seamed. In Azure, they were designed together, so the same resource i-d that you see in the portal u-r-l is the one you use in a template, the one a role assignment binds to, the one a policy targets, and the one the activity log records. That coherence is what lets infrastructure as code, governance, and auditing actually compose.
+
+Now, the resource hierarchy. Every resource in Azure lives in a four-level hierarchy. Memorise this shape — role-based access control, policy, billing, and cost reporting all hang off it.
+
+At the top is the tenant. Your Entra i-d directory. One identity boundary. Users, groups, and service principals live here. A tenant can hold many subscriptions; a subscription belongs to exactly one tenant.
+
+Below the tenant sits the management group. A tree above subscriptions, used to apply policy and role-based access control at scale. The root management group is implicit; you build the tree below it — for example, production at the top of one branch, non-production at the top of another, sandbox off to the side. Up to six levels deep. A policy assigned at a management group cascades to every subscription and resource under it. So if you write a policy that denies public i-p addresses, and you assign it at the production management group, it instantly covers every production subscription, every resource group inside, and every resource inside those.
+
+Then comes the subscription. This is the unit of billing and the unit of quota. Spend caps, payment methods, and Azure resource limits — cores per region, public i-p addresses per subscription — all live here. A small organisation might use one subscription; a large enterprise commonly carves out a subscription per workload, environment, or business unit to isolate blast radius and cost. The bill arrives broken out by subscription, so the carving is also how finance tracks who owes what.
+
+A common pattern is one subscription per environment per workload. So the orders platform gets a production subscription, a staging subscription, and a development subscription. The payments platform gets its own three. That way a runaway development job in payments cannot eat into the quota of the production orders environment, and the finance team can attribute every dollar to a workload and a stage without writing tag-parsing queries. The trade-off is that you now have more subscriptions to govern — which is exactly where management groups earn their keep.
+
+Below that, the resource group. A logical container for resources that share a lifecycle. Deleting a resource group deletes everything in it — that is the feature, not a bug, because it makes teardown trivial. Spin up a demo environment in one resource group, and when you are done, one delete wipes the whole stack. The resource group is also a default role-based access control scope, and a metadata bucket via tags. A resource lives in exactly one resource group; you cannot nest resource groups.
+
+Finally, the resource itself — the actual virtual machine, storage account, key vault, and so on. Every resource has a resource i-d that fully encodes the hierarchy. It starts with the subscription i-d, then the resource group, then the provider namespace like Microsoft dot Storage, then the type, then the name. That long path is what role assignments and policies bind to.
+
+The a-w-s comparison here is loose. a-w-s has Organisations, organisational units, accounts, and resources, where the account is the strong isolation boundary. In Azure, the subscription plays a similar role, but resource groups have no a-w-s analogue — they are a lightweight lifecycle grouping you will use constantly.
+
+Next, regions, geographies, and availability zones. Azure runs in over sixty regions worldwide, grouped into geographies — United States, Europe, India, and so on — that respect data residency boundaries. A region is a cluster of datacenters within a metro area, connected by low-latency fibre, that presents itself to you as a single deployment target like east-u-s or west-europe.
+
+Inside a region, Microsoft offers two failure-isolation primitives, and they often get confused.
+
+The first is availability zones. These are physically separate datacenters within one region, each with independent power, cooling, and network. Three zones per zone-enabled region. A zone-redundant service — a Standard Load Balancer, zone-redundant storage, a zonal virtual machine scale set — tolerates a full datacenter failure transparently. Not every region has zones yet, so check the docs when picking one. The a-w-s equivalent — availability zones — works the same way.
+
+The second is region pairs. These are Microsoft's older high-availability primitive. Each region is paired with another region in the same geography — for example, east-u-s is paired with west-u-s, north-europe with west-europe — for cross-region replication features like geo-redundant storage, and for paired-region maintenance. Microsoft never patches both halves of a pair simultaneously. Newer regions and Azure's strategic direction favour availability zones, but pairs still underpin specific services and remain exam-relevant.
+
+So picture two regions side by side. Inside each region, three datacenters that are the three availability zones — that gives you within-region high availability. Between the two regions, a long-haul replication link — that gives you cross-region disaster recovery and geo-redundant storage.
+
+The rule of thumb: use availability zones for high availability inside a region; use a region pair, or another distant region, for disaster recovery across regions.
+
+The two primitives also answer two different failure questions. Availability zones answer: what if the datacenter catches fire, loses power, or has its uplink severed? You stay up because the other two zones are intact. Region pairs answer: what if the entire metro area has a problem — a major fibre cut, a regulatory shutdown, a once-a-decade weather event? You have a copy of your data, and possibly a warm standby of your application, several hundred miles away. The cost climbs as you move from zone-redundant to region-redundant — replicated bytes, replicated compute, replicated networking — so most teams start with zone redundancy and add cross-region only for the tier of service that genuinely needs it.
+
+Now, sovereign clouds. For workloads bound by regulation, Azure runs isolated cloud instances with separate fabric, separate identity, and separate compliance certifications.
+
+The first is Azure Government, for u-s federal, state, local, and Department of Defense workloads. It is operated by u-s screened personnel in physically segregated datacenters.
+
+The second is Azure China, operated by twenty-one Vianet under Chinese law. It is a legally separate cloud, not just a region. Microsoft does not run it directly.
+
+Azure Germany has been retired, but you may still see legacy references in older docs.
+
+Sovereign clouds are not transparent extensions of public Azure. They have their own portal u-r-ls, their own service availability matrices — some services lag, and some never arrive — and their own Entra i-d tenants. Pick them only when you have a regulatory reason; otherwise stay in public Azure.
+
+The practical implication is that if you have global users and also a u-s federal contract, you may end up running two parallel deployments — one in public Azure for the global side, one in Azure Government for the federal side — with separate code pipelines, separate identities, and separate operational rhythms. That is the cost of the isolation, and it is the same in a-w-s with GovCloud. Plan for it before you sign the contract, not after.
+
+Beyond the main regions, Microsoft pushes compute closer to users, devices, and on-premises datacenters with a family of edge and hybrid offerings. You will rarely deploy these unless you have a specific reason, but you should recognise the names.
+
+Azure Edge Zones are small footprints in metro areas, some carrier-hosted, for sub-ten-millisecond latency to end users. They are the analogue of a-w-s Local Zones and Wavelength.
+
+Azure Stack Hub is a full Azure-consistent cloud you run inside your own datacenter, for disconnected or sovereign scenarios.
+
+Azure Stack h-c-i is hyperconverged infrastructure for hybrid virtual machine and Kubernetes workloads on-premises.
+
+Azure Stack Edge is an appliance you put at a site for local inference and data preprocessing before forwarding to the cloud.
+
+And Azure Arc is the reverse direction. It brings on-premises servers, Kubernetes clusters, and sequel instances under a-r-m's control plane, so you can govern them with the same role-based access control, policy, and monitor you use for native Azure resources.
+
+Arc is the strategically important one. Anything Arc-enabled shows up in your subscription, gets tagged, gets policy-enforced, and gets billed through your Enterprise Agreement. It is how Microsoft pitches a coherent hybrid story that a-w-s Outposts approaches only from the hardware side.
+
+Think about what that means in practice. You have a fleet of Linux servers in a co-location facility, running workloads you cannot move yet. With Arc, you install a lightweight agent on each, and those servers appear in the Azure portal alongside your native virtual machines. You can apply the same baseline policy that requires disk encryption. You can ship their logs to the same Log Analytics workspace your cloud workloads use. You can run Azure Monitor and Microsoft Defender on them. The workloads still run on the metal in the co-location, but the control plane is unified. That is the bet behind Arc — that consistent governance across hybrid is more valuable than yet another cloud-native green-field push.
+
+Finally, choosing a region. When you spin up your first resource, the region prompt is one of the first decisions, and it is harder to undo than it looks. Four factors drive the choice.
+
+First, latency to your users. Pick the region geographically closest to where most traffic originates. Speed-test probes can settle close calls.
+
+Second, data residency and compliance. If regulation pins data to a country, the geography you pick has to satisfy that — and you may need a sovereign cloud.
+
+Third, service and s-k-u availability. Not every region has every service or every s-k-u. Newer s-k-us — the latest virtual machine family, Premium s-s-d v-two, Cosmos d-b multi-region writes — light up unevenly. Always confirm against the products-available-by-region page before committing.
+
+Fourth, price. Region prices differ. The same virtual machine in central-india is cheaper than in west-u-s. If latency and compliance do not force your hand, price can tilt the choice.
+
+Once you commit, migrating regions is non-trivial for stateful workloads. Storage, databases, and identity flows are all region-pinned in subtle ways. A storage account name is global but its data lives in one region; to move it you copy the bytes elsewhere. An Azure sequel database has a primary region; to move it you set up a geo-replica, fail over, and clean up. A virtual network has an address space that often clashes with whatever already exists in the new region. None of this is impossible, but it is a project, not an afternoon. Treat the first region pick as a multi-year decision, not a default.
+
+And that completes the foundations. You now have the four-level hierarchy in your head — tenant, management group, subscription, resource group, resource. You know that every call goes through Azure Resource Manager, so role-based access control and policy are enforced at one chokepoint. You know that within a region, availability zones give you high availability, and across regions, pairs or distant regions give you disaster recovery. And you know the sovereign and edge variants exist for the cases where public Azure does not fit.
+
+From here, every service notebook drops onto this skeleton. Identity and governance come next.
