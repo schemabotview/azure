@@ -1,0 +1,109 @@
+You cannot operate a system you cannot see. Azure Monitor is the umbrella product that gathers everything emitted by Azure resources and applications — metrics, logs, traces — and gives you the dashboards, alerts, and workbooks to act on it. Around it sit Application Insights for application performance, Azure Advisor for recommendations, and Service Health for Microsoft's view of the platform.
+
+The shape. Every Azure resource emits a few metrics for free, a structured Activity Log of management events for free, and optional resource logs that you route through diagnostic settings. Applications add traces and custom telemetry through Application Insights. All of it lands in Log Analytics workspaces, queryable with k-q-l — Kusto Query Language — which is the same query language across every Azure data plane that emits logs.
+
+Let's start with Azure Monitor — the umbrella. Azure Monitor is not one service. It is the brand for a collection of pipes that collect, store, and act on telemetry. There are three data types.
+
+Metrics. Time-series of numeric values. Low latency — typically sub-minute. Retained for ninety-three days. c-p-u percentage, request count, queue depth. Every Azure resource emits a built-in set, and you can publish custom metrics from code.
+
+Logs. Structured records — rows with columns — of events. Resource logs from Azure services, application telemetry, the Activity Log, and custom logs. Stored in Log Analytics workspaces.
+
+And traces. Distributed traces, OpenTelemetry-compatible, captured by Application Insights. Stored in Log Analytics as a special schema.
+
+The umbrella exposes several user-facing surfaces. Metrics Explorer for charting and ad-hoc analysis over metrics. Log Analytics for k-q-l queries over logs and traces. Alerts for threshold-based or query-based rules that fire to action groups. Workbooks for interactive, parameterised reports combining metrics, logs, and visualisations. And Application Insights for application performance management built on the same plumbing.
+
+a-w-s comparison. Azure Monitor is roughly CloudWatch — metrics plus logs plus alarms plus dashboards — plus x-ray for tracing. Azure consolidates the experience. a-w-s has separate consoles for each layer.
+
+Now, Log Analytics workspaces and k-q-l. A Log Analytics workspace is the storage and query engine for logs and traces. A workspace is a regional resource, billed by gigabyte ingested and gigabyte retained.
+
+Inside the workspace, data lives in tables with a schema. AzureActivity. AzureDiagnostics. AppRequests. AppExceptions. Heartbeat. Custom tables. And so on. You query with k-q-l, which is the same language Sentinel, Defender, and Application Insights all use. Learn it once, use it everywhere.
+
+A short sense of the grammar. The pipeline syntax — a vertical bar between operators — chains them. Tabular results flow left to right. The grammar is small. where filters. project selects columns. extend adds calculated columns. summarize aggregates. join joins. And render visualises. A typical query reads: take the AppRequests table, filter to the last hour, filter to failed requests, summarise by result code and a five-minute time bin, and render as a time chart. That is recognisable to anyone who has used sequel — with a pipeline twist that often reads cleaner.
+
+Workspace design. A common pattern is one workspace per environment — or per region per environment — shared across many resource groups. Centralise security logs into a Sentinel workspace. Keep operational logs in workload-aligned workspaces — sometimes the same workspace, sometimes split for cost and access reasons. Workspace-based Application Insights, which is the default since twenty twenty, stores telemetry in a Log Analytics workspace too, so application performance management and infrastructure logs sit in the same store, and k-q-l can join across them.
+
+There are also retention and cost tiers worth knowing. Basic Logs is far cheaper for high-volume logs you do not need to query interactively — verbose audit, network flows — but it limits the operators you can run. The archive tier drops cost further for long-term retention beyond a year, and it accepts a rehydrate step before you can query the data. Picking the right tier per table is one of the highest-leverage cost optimisations in observability.
+
+Next, Diagnostic Settings, Activity Log, and Resource Logs. Every Azure resource emits two kinds of logs by default — and one of them you have to ask for.
+
+The Activity Log is a subscription-level management plane log. Every Azure Resource Manager call — who created what, when, from where. Free to read, retained for ninety days. You can send it to a Log Analytics workspace through a diagnostic setting if you want longer retention or k-q-l joins.
+
+Resource logs are data plane and per-resource logs. StorageRead. AppServiceHTTPLogs. KeyVaultAuditEvent. AzureSQLAuditEvent. And so on. Resource logs are off by default. You turn them on through a diagnostic setting on each resource.
+
+A diagnostic setting on a resource picks log categories and routes them to one or more destinations. A Log Analytics workspace — the default, queryable with k-q-l. A storage account for cheap archival. An Event Hub to stream to a third-party s-i-e-m like Splunk or Elastic, or to your own consumer. Or a partner integration like Datadog or Logz.
+
+Diagnostic setting policies — Azure Policy with the deploy-if-not-exists effect — enforce that every new resource of a given type gets a setting created automatically. That is the operational pattern. Do not expect engineers to remember to turn diagnostic settings on. Wire it through policy.
+
+The terminology trips people up. Activity Log is management plane. Resource logs are data plane. If a question is about who deleted a resource, the answer is in Activity Log. If a question is about who read a secret, the answer is in Key Vault's resource log — but only if you turned it on. That is the discipline. Turn resource logs on for every resource that holds sensitive data, before you need them.
+
+Now, Application Insights. Application Insights is Azure's application performance management — a-p-m. It captures requests, dependencies — database calls and h-t-t-p calls — exceptions, traces, custom events, and metrics from your application, with auto-instrumentation for dot net, java, node, python, and the App Service, Functions, and Container Apps runtimes.
+
+Three primitives in the schema.
+
+Requests and dependencies. Every incoming and outgoing call, with duration, success or failure, and operation i-d. Used to build distributed traces.
+
+Exceptions and traces. Exceptions caught — and ones surfaced by the runtime — plus arbitrary log messages from your code.
+
+Custom events and custom metrics. Application-defined business telemetry.
+
+Distributed tracing stitches operations together by correlation i-d-s — operation i-d and operation parent i-d. When request A in service x calls service y, Application Insights propagates the i-d-s through w-three c trace context headers. The resulting trace shows the full call tree across services in the Transaction Search view. That is how you find which downstream dependency is the actual cause of a slow request, instead of guessing.
+
+Sampling is on by default. Application Insights drops some percentage of low-value traces to keep ingestion costs sane. Adaptive sampling auto-tunes the rate. Fixed-rate sampling lets you pin it. For high-traffic services, sampling is necessary. Without it, you ingest petabytes of trivial successes. Failures, slow requests, and exceptions are sampled less aggressively than uneventful traffic, so the signal survives even when the volume is cut.
+
+Availability tests are synthetic probes that hit your endpoint from multiple Azure regions and alert on failure. Standard tests are the modern replacement for the legacy u-r-l ping tests. They support custom headers, authentication, and content validation. Run them against production from at least three different regions, so a single Azure region having a wobble does not look like an application outage.
+
+Live Metrics is the real-time stream. Open it during a deploy or an incident, and you see traffic, failures, and dependencies in true real time, without waiting for the ingestion lag.
+
+a-w-s comparison. Application Insights is roughly CloudWatch r-u-m plus x-ray plus CloudWatch Synthetics, combined. The auto-instrumentation story on Azure is more polished than the x-ray equivalent.
+
+Let's move to alerts and action groups. Alerts in Azure Monitor come in four flavours, and you will use all four.
+
+Metric alerts. Threshold on a metric — for example, c-p-u greater than eighty percent for five minutes. Cheapest and lowest latency.
+
+Log alerts. A k-q-l query runs on a schedule. The alert fires when the result crosses a threshold.
+
+Activity log alerts. Fire on specific management events — for example, a Key Vault delete operation.
+
+Smart detection alerts, sometimes called anomaly alerts. Application Insights detects unusual behaviour — a response-time spike, a dependency failure spike — without you defining a threshold by hand.
+
+Alerts fire to action groups — reusable collections of notification destinations and response actions. Email, s-m-s, push to the Azure mobile app, voice call. Webhook to PagerDuty, Opsgenie, or a custom service. Logic App, Function, Automation runbook, or ticket through an i-t-s-m tool like ServiceNow. Or Event Grid topic for downstream processing.
+
+The pattern that scales. Have a small number of action groups — for example, a-g-prod-critical, a-g-prod-warning, a-g-non-critical-team — and bind every alert to the right one. Do not create per-alert action groups. You will end up unable to change pager routing without touching dozens of resources.
+
+Alert processing rules sit on top. They suppress alerts during maintenance windows, route different severities differently, and override action groups in bulk.
+
+Next, workbooks and dashboards. Two ways to visualise Azure Monitor data, and they serve different purposes.
+
+Azure dashboards are pinned tiles — metric chart, log query, markdown. Per-user or shared. Best for a small always-on summary view.
+
+Workbooks are interactive, parameterised reports — runbooks in document form, with k-q-l queries, charts, tabbed sections, and drill-down links. Microsoft ships hundreds of templates for specific scenarios — Azure Kubernetes Service cluster health, Storage account performance, cost analysis. Workbooks are the right primitive for site-reliability runbooks, executive rollups, and incident-investigation guides.
+
+Workbooks beat dashboards for almost every non-trivial use case. They support parameters, conditional sections, and complex layouts that dashboards do not. Use dashboards only for the small, always-on summary view, and use workbooks for everything else.
+
+Now, Azure Advisor and Service Health. Two free services that earn a sentence.
+
+Azure Advisor analyses your subscription configuration and emits recommendations across five categories: reliability, security, performance, cost, and operational excellence. Right-size or shut down underutilised virtual machines. Enable soft delete on this Key Vault. Switch this sequel database to a Hyperscale tier for a percentage of cost saving. Review Advisor weekly. The cost recommendations alone often pay for the time you spend looking at the list.
+
+Azure Service Health is Microsoft's status view personalised to your subscriptions and regions. Three tabs. Service issues — ongoing incidents that affect your resources. Planned maintenance — upcoming patches and reboots, where you can configure alerts. And health advisories — non-incident notices about deprecations and certificate updates.
+
+Wire Service Health alerts into the same action groups as your metric alerts so the on-call team learns about Azure-side issues without checking the portal.
+
+a-w-s comparison: Advisor is roughly Trusted Advisor. Service Health is roughly a-w-s Health Dashboard.
+
+That brings us to the close. A production observability and governance setup looks like this.
+
+One Log Analytics workspace per environment — or per region plus environment — provisioned through your landing-zone infrastructure as code.
+
+A diagnostic setting policy with the deploy-if-not-exists effect on every resource type that has logs, pointing at the right workspace.
+
+Application Insights, workspace-based, one per service or per environment. Auto-instrumentation enabled on the runtime — App Service, Functions, Azure Kubernetes Service. Adaptive sampling on.
+
+A small action-group catalogue. Critical to page on-call. Warning to a Teams channel. Info to an email digest. Every alert references one of those groups.
+
+Alerts as code — metric, log, and activity alerts defined in Bicep or Terraform alongside the resource they monitor. Smart detection on every Application Insights instance.
+
+Workbooks, not dashboards, for the site-reliability runbooks. Pinned dashboards only for always-on summaries.
+
+And Advisor plus Service Health alerts wired to the same action groups, so platform issues and your own incidents share a channel.
+
+Observability done right is what lets the rest of this series stay simple. When something breaks — and something always breaks — you find out fast, you see the blast radius, and you have the data to fix the root cause instead of guessing. DevOps, high availability, disaster recovery, and migration come next.

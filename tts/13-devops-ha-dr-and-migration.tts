@@ -1,0 +1,129 @@
+The last three operational pillars sit together for a reason. How you ship code — that is the DevOps story. How you survive failure — that is the high-availability and disaster-recovery story. And how you get to Azure in the first place — that is the migration story. The three are tightly coupled.
+
+A robust deployment pipeline is what lets you exercise failover regularly. A tested disaster recovery posture is what makes migrations safe. And a disciplined migration is the first test of both.
+
+This notebook covers the spine. Azure DevOps and GitHub Actions as the two pipeline runtimes. Bicep and a-r-m templates for infrastructure as code. Deployment strategies for safe rollouts. Azure Backup and Site Recovery for data and workload protection. High-availability and disaster-recovery patterns for the design. And Azure Migrate plus the Database Migration Service plus the Data Box family for the move-in journey.
+
+Let's start with Azure DevOps versus GitHub Actions. Microsoft owns two continuous-integration and continuous-deployment platforms. Both are first-class on Azure, and both are here to stay.
+
+Azure DevOps Services bundles five products under one tenant. Repos for git hosting. Pipelines for yaml-defined c-i and c-d, with hosted Linux, Windows, and Mac agents, and the ability to self-host runners. Boards for work items, sprints, and Kanban. Artifacts for package feeds — NuGet, n-p-m, Maven, PyPI, generic. And Test Plans for manual test management.
+
+GitHub Actions on Azure is the modern direction for most teams. Code lives in GitHub. Actions runs c-i and c-d. Deploys to Azure go through the azure-login action with open-i-d-connect federation. The connector ecosystem is broader, the community is the world's, and Microsoft is shipping Azure-specific actions on Actions first.
+
+When to pick which. An enterprise already in Azure DevOps, with Boards integrated to Pipelines and on-premises t-f-v-c migrations behind it, should keep using Azure DevOps Pipelines. A new team, an open-source-style flow, or multi-cloud or cross-organisation work should use GitHub plus Actions. A mixed estate is common — many shops run both, with Pipelines on legacy projects and Actions on new ones.
+
+Both speak yaml pipelines, support reusable templates, and integrate with Azure for deployments. Mechanically, you can swap between them with modest effort. The choice is mostly about organisational fit, not about technical capability.
+
+Now, service connections and open-i-d-connect federation. However you run the pipeline, the hard problem is: how does the runner authenticate to Azure to deploy? The wrong answer — and the legacy default — is to put a client secret on an Entra i-d app registration, store it in the pipeline as a secret variable, and call it done. Secrets leak. Secrets rotate poorly. Secrets live longer than they should.
+
+The right answer is federated credentials, also called open-i-d-connect, often shortened to o-i-d-c.
+
+On the Entra i-d app registration, you add a federated credential that trusts a specific GitHub repo and branch, or a specific Azure DevOps service connection. At pipeline run time, the runner gets a short-lived open-i-d-connect token signed by GitHub or by Azure DevOps. It exchanges the open-i-d-connect token for an Entra i-d access token through Workload Identity Federation. No secrets are stored anywhere.
+
+In GitHub Actions, the azure-login action with the client i-d, tenant i-d, and subscription i-d, plus an i-d-token-write permission on the job, does this end to end.
+
+In Azure DevOps, you configure a service connection of type workload identity federation instead of service principal manual.
+
+Combine federation with a least-privilege role assignment on the target scope — Contributor on one resource group, not Owner on the subscription — and you have a deployment identity that is short-lived, scoped, and auditable. This is the modern best practice. Treat anything else as legacy.
+
+Let's move to Bicep and a-r-m templates. Infrastructure as code on Azure has two first-party options.
+
+a-r-m templates are json, declarative, and the original tool. Verbose, harder to read.
+
+Bicep is a domain-specific language that transpiles to a-r-m. Cleaner syntax, modules, type checking, az-deployment integration. Bicep is Microsoft's recommended infrastructure-as-code tool for Azure-only deployments.
+
+Most teams either use Bicep — Azure-native, less ceremony — or Terraform with the AzureRM provider — multi-cloud, ecosystem, state management. Pulumi and Crossplane have niches but smaller share.
+
+Key Bicep features worth knowing.
+
+Modules. Reusable units, parameterised, composable. The right unit of sharing across teams.
+
+What-if. The az deployment group what-if command shows exactly what will change before you apply. Use it in continuous integration as a guard rail — every pull request runs what-if, and reviewers see the delta in the diff comment.
+
+Deployment scopes. Resource group, subscription, management group, tenant. The scope shapes which resource types you can deploy.
+
+Deployment Stacks. A newer feature that bundles a deployment with deny assignments, so the deployed resources cannot be modified out-of-band. Deployment Stacks supersede Azure Blueprints.
+
+And Template Specs. Versioned, shareable templates stored in a resource group. Teams reference them as a module source from anywhere in the tenant.
+
+a-w-s comparison. Bicep is roughly CloudFormation's domain — Azure-native infrastructure as code. Terraform usage is essentially identical across both clouds.
+
+Now, deployment strategies. Four ways to roll out a new version, in order of risk.
+
+In-place. Overwrite the running instance with the new version. Fastest, riskiest. Acceptable for stateless backend updates and small deployments.
+
+Rolling. Update n percent of instances at a time, wait for health to confirm, then continue. The virtual machine scale set rolling upgrade pattern from notebook three.
+
+Blue-green. Provision a new environment — blue — alongside production — green. Test the new environment. Swap routing. App Service deployment slots are this pattern in one click. The swap is near-instant and reversible.
+
+Canary. Route a small percentage of real traffic to the new version, watch metrics, and gradually increase. Container Apps revisions with weighted traffic split, and Front Door rules-engine percentage routing, both support canary natively.
+
+Pick the strategy that the service supports cheaply. App Service goes to slots, which is blue-green. Container Apps goes to revisions, which is canary. Virtual machine scale sets go to rolling upgrades. Azure Kubernetes Service uses a deployment controller like Argo Rollouts or Flagger, or a service mesh like Linkerd or Istio, for traffic shifting.
+
+Always pair a strategy with rollback automation. Health probes that fail the deployment. A one-click revert — slot swap back, revision weight reset. A strategy that needs a human to roll it back at three a-m is a strategy that will not get rolled back at three a-m.
+
+Next, Azure Backup. Azure Backup is the managed backup service.
+
+The model. A Recovery Services vault, in the classic flavour, or a Backup vault, the newer flavour for Azure Files, blobs, disks, and PostgreSQL, holds the backups. Backup policies define schedule, retention, and instant-restore window. Soft delete retains deleted backups for at least fourteen days. Immutable vaults lock policies against tampering, which is a ransomware defence — even an Owner cannot shorten retention or delete the vault.
+
+What it backs up. Virtual machines, with application-consistent snapshots through the v-m Backup extension — volume shadow copy on Windows, scripts on Linux. sequel server on a virtual machine, with log shipping and point-in-time restore down to seconds. s-a-p hana on a virtual machine, with the right extensions. Azure Files, blobs, and disks, through vault-based snapshots. PostgreSQL Flexible Server, the older Single Server, and other managed databases. And on-premises workloads through the m-a-r-s agent, or through m-a-b-s — System Center d-p-m in the cloud.
+
+A critical distinction. Backup is not disaster recovery. Backup is point-in-time recovery for accidental deletes, ransomware, or corruption. The recovery-time objective is hours. The recovery-point objective is the schedule interval. For lower recovery-time and recovery-point objectives, you need Azure Site Recovery.
+
+Now, Azure Site Recovery. Site Recovery replicates workloads to a secondary region — or from on-premises to Azure — and orchestrates failover.
+
+The model. A Recovery Services vault in the target region holds replication state. For each protected virtual machine, Site Recovery replicates disks asynchronously to the target, typically achieving a recovery-point objective of seconds to a few minutes.
+
+Replication groups and recovery plans orchestrate multi-virtual-machine, multi-tier failovers in dependency order — the database before the application before the web tier.
+
+Test failover boots a copy in an isolated network to validate without affecting production. Practise it quarterly. A disaster recovery plan you have never run is a plan, but it is not a tested plan.
+
+Planned failover is a clean swap when you know an outage is coming. Unplanned failover is the actual disaster path. The recovery point is the latest replicated state.
+
+Site Recovery is also Microsoft's preferred path for virtual machine migration into Azure. You install the Site Recovery agent on-premises, let it replicate to Azure, and then fail over as the cutover.
+
+a-w-s comparison: Site Recovery is roughly Elastic Disaster Recovery — d-r-s. Azure Backup is roughly a-w-s Backup.
+
+Let's move to high-availability and disaster-recovery patterns. The same patterns apply across services. The implementation differs by tier.
+
+Zonal. Pin a single virtual machine or instance to one zone. Failure of that zone takes it down.
+
+Zone-redundant. Deploy across all three zones in the region. Survives one-zone failure. This is the default for production. It is available for virtual machine scale sets in flexible orchestration, App Service Premium v-three, Application Gateway v-two, Standard Load Balancer, zone-redundant storage, and zone-redundant sequel.
+
+Active-passive multi-region. The primary region serves all traffic. The secondary region holds replicated state and is brought online on failover. This is the cheapest multi-region pattern. The recovery-time objective is measured in minutes to hours, depending on automation.
+
+Active-active multi-region. Both regions serve traffic. Replication is bidirectional, or it goes through a shared store. This pattern gives you the lowest recovery-time and recovery-point objectives, at the highest cost and complexity. Front Door, plus multi-region Application Gateways, plus Cosmos d-b multi-write, plus Azure sequel active geo-replication, is the canonical stack.
+
+Two numbers drive every disaster recovery conversation. Recovery time objective — r-t-o — is how long you can be down. Recovery point objective — r-p-o — is how much data you can afford to lose.
+
+Quote them per workload, not per organisation. The customer-facing transactional service may need an r-t-o below five minutes and an r-p-o below thirty seconds. The back-office reporting database may be fine with an r-t-o of twenty-four hours and an r-p-o of four hours. Buying multi-region active-active for everything is the costliest mistake in disaster recovery planning.
+
+Now, migration. Moving an existing estate to Azure has its own product family.
+
+Azure Migrate is the umbrella hub. Discovery and assessment. Appliances installed in the source environment — VMware, Hyper-V, physical, a-w-s, g-c-p — inventory the workloads, measure utilisation, and produce sizing and cost estimates for Azure equivalents. Server Migration replicates and cuts over to Azure virtual machines, powered by Site Recovery underneath. Database assessment is done by Data Migration Assistant, which evaluates compatibility for sequel server moves. And web app migration uses the App Service Migration Assistant for i-i-s and java web apps.
+
+Azure Database Migration Service handles the actual database cutover. sequel server to Azure sequel database or managed instance. MySQL to Azure Database for MySQL. PostgreSQL to Flexible Server. Mongo to Cosmos d-b. Two modes. Offline is a single cutover, and downtime equals the data copy time. Online is initial copy plus continuous change-data-capture replication, and the cutover is a near-zero-downtime switch.
+
+The Azure Data Box family handles bulk data transfer when bandwidth would make a network upload impractical. The standard Data Box is an eighty-terabyte physical appliance shipped to you. You load data and ship it back. Microsoft ingests it into your storage account. Data Box Disk is eight-by-eight-terabyte solid state drive packs for smaller jobs. Data Box Heavy is eight hundred terabytes on wheels. And Data Box Gateway is a virtual appliance that exposes s-m-b or n-f-s locally, and uploads asynchronously over your existing link.
+
+Rule of thumb. If shipping a Data Box is faster than your internet link can sustain over the migration window, ship the box. The math usually favours physical transport for any move above tens of terabytes on a moderate corporate connection.
+
+a-w-s comparison. Azure Migrate is roughly a-w-s Application Migration Service plus Migration Hub. The Database Migration Service is roughly a-w-s d-m-s. The Data Box family is roughly a-w-s Snowball and Snowmobile.
+
+That brings us to the close. A modern Azure delivery and resilience stack, layered.
+
+Source of truth. GitHub — or Azure Repos — with the landing zone in Bicep, applications in their own repositories, with Bicep modules for their resources.
+
+Pipelines. GitHub Actions preferred, or Azure DevOps Pipelines, authenticating through open-i-d-connect federation, with least-privilege role assignments per environment scope.
+
+Deploy strategy. App Service slot swap. Container Apps revision split. Or virtual machine scale set rolling upgrade, depending on the service. Health probes wired to fail bad deployments automatically.
+
+What-if in continuous integration. Every pull request runs az deployment what-if. Reviewers see exactly what will change before merge.
+
+Backup. Azure Backup with an immutable vault for virtual machines, databases, and Files. Quarterly restore drills are non-negotiable.
+
+Disaster recovery. Zone-redundant by default. Multi-region active-passive — or active-active — for the customer-facing tier, with explicit recovery-time and recovery-point objectives. Site Recovery for virtual-machine-based disaster recovery. Cross-region geo-replication and auto-failover groups for managed databases.
+
+And migration. For any move-in, Azure Migrate to discover and assess. Site Recovery and Server Migration for virtual machines. Database Migration Service for databases. Data Box for bulk data. Everything lands in the same infrastructure-as-code that the existing estate uses.
+
+The discipline ties together. Code is shipped through pipelines that prove they can deploy and roll back. Failure is rehearsed through periodic failover and restore drills. Migration arrives into the same shape, so the moved workload behaves like every other Azure workload from day one. The Well-Architected Framework, cost management, and exam preparation come next, and they close out the series.
