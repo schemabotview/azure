@@ -7,12 +7,19 @@
 //   2. SLIDES do not scale to fit. useSlideScale sets `zoom = paneWidth / 806` — width-proportional
 //      only — so type size is fixed by the frame and an over-long slide CLIPS at the bottom
 //      (.slide-panel is `align-items: safe center`, which falls back to start when content
-//      overflows). The pane is ~1080 DESIGN px tall, so the check MODELS the rendered height.
+//      overflows). The pane is 1081 DESIGN px tall at 16:9, so the check MODELS the rendered height.
 //
 //      Character count is a poor proxy and was the earlier check: a bullet-heavy slide renders far
 //      taller than a prose one of the same length. The slide that actually clipped was 869 chars
 //      (modelling 1198px) while a 895-char slide rendered fine (953px) — the bullets each wrapped to
 //      two lines. Height is what matters.
+//
+//      Every constant below is MEASURED off the rendered app (canvas measureText against the real
+//      faces, computed styles off the real elements), against 18 slides whose true height was read
+//      out of the DOM. It lands within ±3.5%, and that error is irreducible: the face is
+//      proportional, so a line of wide words overflows a character budget a line of narrow ones
+//      fits, and one wrapped block can be off by a line (37.7px) either way. This catches the gross
+//      case. THE ORACLE IS THE RENDERED DOM — see the note on SLIDE_H_MAX.
 //   3. A `focus:` on a Section that names no node in its scene is a silent no-op — SceneView marks
 //      `__focus` by id comparison and simply never matches, so the section renders with nothing lit.
 //   4. A SECTION WITH NO WAV narrates nothing. The app resolves audio by convention —
@@ -39,7 +46,24 @@ const SUB_CPL = 20 // chars per line at 13px
 const LINE_LABEL = 21.6 // 18px × 1.2
 const LINE_SUB = 15.6 // 13px × 1.2
 // Landscape design metrics, read off index.css (.stage--section .slide-panel__scaler).
-const SLIDE_H_MAX = 1100 // pane ≈ 1080; the model runs ~7% high, so this is the practical ceiling
+// The pane measures 1078 DESIGN px — read off the rendered app as `panel.clientHeight / zoom`, not
+// guessed. Every constant in this model was measured the same way (see CPX below), and against 18
+// slides whose true height was read out of the DOM it lands within ±3.5%.
+//
+// That ±3.5% is IRREDUCIBLE, and worth understanding before tightening this number. The model
+// counts characters; the face is proportional, so a line of wide words overflows a character budget
+// a line of narrow ones fits. One wrapped block can therefore be off by a line (37.7px) either way.
+// Lowering the ceiling to cover the worst undercount would flag six slides that are verified
+// correct on screen, which is how a guard gets ignored.
+//
+// So this catches the gross case, and the ORACLE IS THE RENDERED DOM. To read the truth for a
+// section, with the dev server up and the section routed:
+//
+//   const p = document.querySelector('.slide-panel')
+//   const sc = document.querySelector('.slide-panel__scaler')
+//   sc.scrollHeight                          // the slide's true design height
+//   p.scrollHeight > p.clientHeight + 1      // whether it is actually clipping
+const SLIDE_H_MAX = 1078
 const PANE = 806, PAD_X = 60, FS = 26
 const TEXT_W = PANE - PAD_X * 2 // 686
 const LI_W = TEXT_W - 30 // li has padding-left: 30
@@ -47,14 +71,23 @@ const LI_W = TEXT_W - 30 // li has padding-left: 30
 // text column is ~43px narrower. Measured off a rendered runbook slide whose numbered command list
 // wrapped a line more than the model predicted, and clipped.
 const LI_W_OL = TEXT_W - 73
+// A BLOCKQUOTE is inset: its inner paragraph measures 606px, not 686, and it carries a 26px top
+// margin rather than a paragraph's zero. Modelling it as a plain paragraph cost a whole wrapped
+// line on every slide that ends in one — measured off the rendered DOM, not read off the CSS.
+const QUOTE_W = TEXT_W - 80
 const BODY_LH = FS * 1.45
 const H2_H = FS * 1.73 * 1.15
 const H3_H = FS * 1.2 * 1.2
-const CPX = 12.4 // px per character at 26px IBM Plex Sans (measured off a rendered slide)
-// A heading is set larger, so it wraps sooner in the same column. Scaled from CPX by the heading's
-// own font-size ratio, and both are weight-600, which is why the ratio alone is close enough.
-const H2_CPX = CPX * 1.73
-const H3_CPX = CPX * 1.2
+// Average advance per character at 26px IBM Plex Sans, weight 400 — measured with canvas
+// measureText over 4,102 characters of THIS repo's own rendered slide text, which is the only
+// corpus that matters. The earlier 12.4 came from measuring an alphabet string, and an alphabet
+// over-weights m/w: it made every borderline line wrap one item early and pushed the model's error
+// spread to +15%, which is what forced the ceiling up to a value that could not catch a real clip.
+const CPX = 11.52
+// A heading is set larger AND heavier, so it wraps sooner in the same column.
+// Measured the same way, over the headings of nine rendered slides.
+const H2_CPX = 20.99
+const H3_CPX = 14.95
 
 /** Wrapped line count for one markdown block at the given column width.
  *
@@ -64,14 +97,17 @@ const H3_CPX = CPX * 1.2
  * undercounted by a whole line (~52px at h2). `databases` §09 modelled 1096px, passed, and clipped
  * its title at the top and its blockquote at the bottom on screen. */
 function textLines(text, widthPx, cpx = CPX) {
-  // **bold** is ~10% wider at weight 700 — pad it so a bold-heavy line wraps when it really does.
-  const padded = text.replace(/\*\*(.+?)\*\*/g, (_, b) => b + 'x'.repeat(Math.ceil(b.length * 0.1)))
-  // `inline code` renders as a monospace CHIP: horizontal padding either side, and a wider glyph
-  // than the body face. Counting the bare characters underestimated a chip-heavy slide badly enough
-  // to pass a runbook slide that clipped its last line on screen — a numbered list of commands is
-  // almost all chips. Two characters of allowance per chip is calibrated against the slides that
-  // DID render correctly — three flagged several that were verified fine on screen.
-  const chipped = padded.replace(/`([^`]+)`/g, (_, c) => c + 'xx')
+  // **bold** is wider at weight 700 — pad it so a bold-heavy line wraps when it really does. The
+  // factor is MEASURED over the same corpus: 12.517px per character at weight 700 against 11.518
+  // at 400, so 8.7%.
+  const padded = text.replace(/\*\*(.+?)\*\*/g, (_, b) => b + 'x'.repeat(Math.ceil(b.length * 0.087)))
+  // `inline code` renders as a monospace CHIP, and it is MEASURED rather than guessed: a chip is
+  // set at 20.28px mono (≈10.47px per glyph, or 0.91 of a body character) inside 7px of padding
+  // either side (≈1.22 body characters). So a chip costs slightly MORE than its characters when it
+  // is short and slightly less when it is long — the earlier flat "+2 per chip" over-counted every
+  // short one. The replacement is a solid run of x, which also models the chip correctly as
+  // UNBREAKABLE: `202 Accepted` cannot wrap at its space.
+  const chipped = padded.replace(/`([^`]+)`/g, (_, c) => 'x'.repeat(Math.max(1, Math.round(c.length * 0.91 + 1.22))))
   const clean = chipped.replace(/[*`_]/g, '')
   const cpl = Math.floor(widthPx / cpx)
   let n = 1
@@ -109,6 +145,9 @@ function slideHeight(md) {
       ul ??= { lines: 0, items: 0 }
       ul.items++
       ul.lines += textLines(l.replace(/^([-*]|\d+\.)\s/, ''), /^\d/.test(l) ? LI_W_OL : LI_W)
+    } else if (l.startsWith('> ')) {
+      closeUl()
+      blocks.push({ mt: 26, h: textLines(l.slice(2), QUOTE_W) * BODY_LH, mb: 16 })
     } else {
       closeUl()
       blocks.push({ mt: 0, h: textLines(l, TEXT_W) * BODY_LH, mb: 16 })
@@ -121,7 +160,10 @@ function slideHeight(md) {
     h += (i === 0 ? 0 : Math.max(prevMb, b.mt)) + b.h
     prevMb = b.mb
   })
-  return Math.round(h) // CSS zeroes the last child's margin-bottom
+  // The LAST block's margin-bottom counts. This used to be dropped on the assumption that CSS
+  // zeroes it, and it does not: the scaler's scrollHeight includes it, which is exactly the
+  // systematic -16px (~1.6%) the model showed against every measured slide.
+  return Math.round(h + prevMb)
 }
 
 /** Word-aware line count for `text` in a column `cpl` characters wide. */

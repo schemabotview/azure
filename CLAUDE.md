@@ -26,9 +26,9 @@ immediately; each fills as its slice is authored. **Courses 1–5 are the shippa
 syllabus order; `→` past a course's last section rolls into the next.
 
 **Authored so far:** `foundations` (10) · `identity` (10) · `compute` (9) · `storage` (9) ·
-`networking` (10) — the whole shippable prefix — plus `databases` (9) = **57 sections**. Courses
-7-11 are declared with `sections: []`. No audio yet, so every authored course's section order is
-still free to change.
+`networking` (10) — the whole shippable prefix — plus `databases` (9) and `serverless` (9) =
+**66 sections**. Courses 8-11 are declared with `sections: []`. No audio yet, so every authored
+course's section order is still free to change.
 
 ## The one idea the arc is built on
 
@@ -64,13 +64,20 @@ Renderer mix per course, and no two adjacent sections share one. Check the plan 
 | `storage` | nest · table · flow · board · table · script · flow · nest · script |
 | `networking` | nest · table · script · board · flow · table · flow · board · table · nest |
 | `databases` | board · table · script · table · nest · script · table · flow · script |
+| `serverless` | script · table · script · flow · board · nest · compare · script · flow |
+
+`compare` and `table` are BOTH table nodes — the difference is only whether you read down the rows
+or across them. So they count as the same renderer for adjacency: two in a row read as one repeated
+frame. `serverless` was planned around that.
 
 ## Authoring rules — learned on these frames
 
 - **A wide, short composition renders small.** fitView is width-bound, so two containers side by
-  side (≈1040×290) come out at roughly half the type size of the same content stacked. §02 and §06
-  were both authored side-by-side, looked thin on the frame, and were stacked. Check the render
-  before assuming a horizontal arrangement reads better.
+  side (≈1040×290) come out at roughly half the type size of the same content stacked. `foundations`
+  §02 and §06 were both authored side-by-side, looked thin on the frame, and were stacked. A board
+  of three piles has the same problem: `serverless` §05 rendered at half size at `cols: 3` and at
+  full size at `cols: 2` with the third pile centred underneath. The left pane is roughly SQUARE —
+  aim a composition at that, not at a letterbox.
 - **A data table's width sets its type size.** §05 and §09 shipped with sentence-length cells and
   rendered at half the size of §07's table. Keep a cell to a phrase; the sentence belongs in the
   slide.
@@ -84,10 +91,21 @@ Renderer mix per course, and no two adjacent sections share one. Check the plan 
   identical to the pile it was contrasted against. Where the COLOUR is the argument, use lucide.
 - **`flow: 'LR'` caps at three cards** — `storage`'s four-tier path came out at a third of legible
   size before it was switched to TB.
-- **Keep a slide's `## ` title to one rendered line.** `check-content.mjs` used to push a single
-  line's height for any heading, so a two-line title was undercounted by ~52px: `databases` §09
-  modelled 1096px, passed, and clipped its title AND its closing blockquote on screen. The guard now
-  wraps headings at their own glyph width — but a title that needs two lines is a title to shorten.
+- **Review slides in a 16:9 viewport.** The slide pane's usable height in DESIGN px is roughly
+  `2015 × (viewport height / width)` — because the shell scales by WIDTH (`zoom = paneWidth / 806`)
+  while the pane's pixel height comes from the window. At 16:9, the capture ratio, that is **1081
+  design px**. A wide, short browser window shrinks it to ~1000 and reports three slides clipping
+  that the capture frame renders perfectly. Size the window before trusting the frame.
+- **The oracle for a slide's height is the DOM, not the guard.** With a section routed:
+  `document.querySelector('.slide-panel__scaler').scrollHeight` is its true design height, and
+  `panel.scrollHeight > panel.clientHeight` is whether it actually clips. `check-content.mjs` models
+  the same number from characters and lands within ±3.5% — good enough to catch the gross case,
+  never good enough to settle a borderline one. All 66 sections were measured this way; the tallest
+  is 1072 against the 1081 pane.
+- **Keep a slide's `## ` title to one rendered line.** The guard used to push a single line's height
+  for any heading, so a two-line title was undercounted by ~52px: `databases` §09 modelled 1096px,
+  passed, and clipped its title AND its closing blockquote on screen. Headings now wrap at their own
+  measured glyph width — but a title that needs two lines is a title to shorten.
 - **Keep a leaf card's `label` to ~3 words and its `sub` to one line.** A leaf is a fixed 210×96; it
   does not grow. `npm run check` models this, but it models the *height*, not whether the wrap reads
   well.
