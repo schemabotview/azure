@@ -1,0 +1,26 @@
+import type { Section } from '../types'
+
+export const bicep: Section = {
+  id: 'bicep',
+  title: 'ARM, Bicep and Terraform',
+  scene: 'a-resource-group-as-code',
+  slide: `## The same resource, minus the punctuation
+
+**ARM JSON** is what Azure accepts. **Bicep** compiles to it — the same types, api-versions and properties, minus the ceremony. Anything ARM can express, Bicep can.
+
+### Why it is worth the change
+Declarative, so a deployment is **idempotent** — describe the end state, re-run it safely. Types are checked before anything is sent.
+
+### Bicep or Terraform
+- **Terraform** — one language across clouds, and a **state file** to store, lock and repair
+- **Bicep** — Azure only, and **no state at all**. It asks ARM what already exists
+
+Multi-cloud or an existing Terraform practice: Terraform. Azure only: Bicep.
+
+### Where it meets this course
+The property that policy would have denied is in the file, in review, before it is deployed.
+
+> Console-built infrastructure is a system nobody can rebuild, described by whoever remembers it.`,
+  narration:
+    "We finish with infrastructure as code, and I want to start by dismantling something that stops people engaging with it. ARM templates have a reputation for being awful. That reputation was earned, and it was earned by the JSON, not by the model. The model underneath — resource types, api-versions, properties, dependencies — is fine, and it is the only model Azure has: everything you have done in the portal throughout this entire course was ARM, being written for you by a form. Bicep is that same model with the punctuation removed. It compiles to ARM JSON. It is not a different system, it is not a translation layer with its own opinions, and anything ARM can express Bicep can express. It even decompiles back, which means you can take an existing template, or export one from a resource group you built by hand, and get readable Bicep out of it. Look at the file on the left, because there is nothing exotic in it. A couple of parameters. A resource, with its type and api-version, its name, its location, its SKU and its properties. A tag block. An output, so whatever deploys this can hand the blob endpoint to the next thing. That is a real, complete, deployable file, and it is about fifteen lines for something whose ARM JSON equivalent is roughly triple. The property that matters most is that it is declarative, which gives you idempotence. You are not writing steps, you are describing an end state, and the deployment engine works out the difference. Which means running it again is safe. That single property is what makes infrastructure as code operationally different from a shell script that creates things: you can re-run it on every commit, and the fourth run is as safe as the first. On top of that you get modules, so a landing zone becomes a composition rather than a four-thousand-line file, and you get type checking and expression evaluation before anything is sent to Azure, so a typo is a compile error rather than a half-finished deployment. Now the comparison people actually want, which is Bicep against Terraform, and I will give you a straight answer. Terraform's advantages are real: one language across Azure, AWS and everything else, a very large provider ecosystem, and a mature practice around it that a lot of engineers already have. Its cost is the state file. Terraform keeps its own record of what it believes exists, and that file is now infrastructure you own — you have to store it somewhere durable, lock it so two people cannot apply at once, and occasionally repair it when it disagrees with reality, which happens the first time somebody changes something in the portal. Bicep has no state at all. It asks ARM what is there, because ARM already knows. That is a genuine simplification and it removes an entire category of operational problem. So: if you are multi-cloud, or your organisation already has a Terraform practice, use Terraform and do not feel bad about it. If you are Azure only, use Bicep — it is a smaller thing to learn, it is maintained by the same people who ship the resource providers, so new features appear in it immediately, and you never think about state. Notice one more thing in that file before we finish, because it ties the course together. The property that says HTTPS-only is true, and the one that says public blob access is false — those are exactly the properties that the policy in the second section would have denied the deployment for. Which means that with policy and infrastructure as code together, the compliance conversation moves. It stops being an audit that finds problems in production, and becomes a line in a pull request that somebody read before it was merged. That is the whole point of this course, really. And the closing argument for all ten of these sections is the same one. Infrastructure built by clicking is a system that exists only in the portal, is described only by whoever remembers building it, and cannot be recreated in another region or another subscription without someone doing it all again from memory. Every control in this course — policy, tags, landing zones, budgets, logging, alerts, backup — is easier, cheaper and more reliable when the estate it applies to is written down in a file. That is where this ends.",
+}

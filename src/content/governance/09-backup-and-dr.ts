@@ -1,0 +1,24 @@
+import type { Section } from '../types'
+
+export const backupAndDr: Section = {
+  id: 'backup-and-dr',
+  title: 'Backup and DR',
+  scene: 'two-numbers-decide-it',
+  slide: `## Two numbers, stated before the argument
+
+**RPO** — how much data you may lose, measured in time. **RTO** — how long you may be down. Write both as numbers, agreed with the business, before anyone proposes a design.
+
+### They are not alternatives
+**Azure Backup** saves you from deletion and corruption: point-in-time copies, restored per file, disk or database. **Site Recovery** saves you from losing a region: continuous replication and an orchestrated failover.
+
+A deleted table is restored from backup — Site Recovery faithfully replicated the deletion.
+
+### What makes it real
+- **Soft delete** on the vault, so ransomware cannot delete the backups too
+- A **restore** you have actually performed. An untested backup is a belief
+- A **failover drill**, because Site Recovery has a test mode that touches nothing
+
+> An untested backup and no backup differ only in which day you find out.`,
+  narration:
+    "This section is really about two numbers, and I want to put them first, because every architecture argument about backup and disaster recovery is unresolvable until somebody has said them out loud. The first is recovery point objective. How much data may you lose, expressed as time. If your RPO is one hour, then losing up to an hour of writes is acceptable and losing four is not. The second is recovery time objective. How long may you be down. If your RTO is four hours, a restore that takes nine is a failure regardless of how elegant it was. Both of these are business decisions, not technical ones, and they need to be agreed and written down before anyone proposes a design — because the design falls straight out of them, and arguing about technology without them is how teams spend a month and reach no conclusion. Now, the two services, and the thing to understand is that they are not competitors. They protect against completely different disasters. Azure Backup protects you against deletion and corruption. It takes point-in-time copies on a schedule into a Recovery Services vault, and you restore a specific thing as it was at a specific moment — a file, a disk, an entire virtual machine, a database. Its granularity is fine and its recovery time is measured in hours, because copying data back takes as long as it takes. Site Recovery protects you against losing a region, or a datacentre, or the whole primary site. It continuously replicates machines to a secondary region and lets you fail over in an orchestrated way, with a recovery plan that brings things up in the right order. Its recovery point is seconds to minutes and its recovery time is minutes, which sounds strictly better until you notice what it does not do. And this is the sentence I would like you to remember from this section. If somebody drops a production table at ten in the morning, Site Recovery will have faithfully and efficiently replicated that deletion to your secondary region within seconds. It is a mirror. It does not have a yesterday. Only backup has a yesterday. Which is why most real estates need both, and why the question is never which one, it is what each is for. Their cost shapes differ too, and it matters. Backup is storage you consume — you pay for what is retained, and long retention on large data is where the bill quietly grows. Site Recovery costs you a replica that exists whether or not you ever fail over, so it is a standing charge, and you apply it to the small number of workloads whose recovery time objective genuinely justifies it. Not everything needs to survive a region loss in minutes, and pretending otherwise is expensive. Three things that turn this from a purchase into a capability. First, soft delete on the vault, and it should be on by default now but check it. The attack it prevents is specific and it has happened to real organisations: an attacker with sufficient rights deletes the backups first, and then the data. Soft delete means the backups survive that, for a window. Second, and I cannot say this strongly enough: perform a restore. Not review the configuration, not check that the job reports success — actually restore something into a scratch environment and look at it. Restores fail for reasons that are invisible from the backup side: a missing permission, a key you no longer have, a dependency that was never in scope. Third, run a failover drill. Site Recovery has a test failover mode that brings your workload up in an isolated network and touches nothing in production, and it exists precisely so that you find out about the ordering problem — the app that came up before the database — on a Wednesday afternoon rather than during the actual disaster. An untested backup and no backup at all differ only in which day you discover the problem.",
+}
