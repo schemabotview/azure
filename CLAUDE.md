@@ -27,8 +27,8 @@ syllabus order; `→` past a course's last section rolls into the next.
 
 **Authored so far:** `foundations` (10) · `identity` (10) · `compute` (9) · `storage` (9) ·
 `networking` (10) — the whole shippable prefix — plus `databases` (9), `serverless` (9), `data` (9),
-`security` (9) and `governance` (10) = **94 sections**. Only `project` is still declared with
-`sections: []`. No audio yet, so every authored course's section order is still free to change.
+`security` (9), `governance` (10) and `project` (10) = **104 sections**. The whole arc is authored.
+No audio yet, so every course's section order is still free to change.
 
 ## The one idea the arc is built on
 
@@ -68,6 +68,7 @@ Renderer mix per course, and no two adjacent sections share one. Check the plan 
 | `data` | board · script · nest · compare · nest · table · board · script · flow |
 | `security` | nest · table · flow · nest · board · flow · script · table · board |
 | `governance` | board · script · table · nest · flow · nest · script · flow · table · script |
+| `project` | table · board · script · nest · table · flow · script · flow · table · board |
 
 `compare` and `table` are BOTH table nodes — the difference is only whether you read down the rows
 or across them. So they count as the same renderer for adjacency: two in a row read as one repeated
@@ -103,7 +104,7 @@ frame. `serverless` was planned around that.
   `document.querySelector('.slide-panel__scaler').scrollHeight` is its true design height, and
   `panel.scrollHeight > panel.clientHeight` is whether it actually clips. `check-content.mjs` models
   the same number from characters and lands within ±3.5% — good enough to catch the gross case,
-  never good enough to settle a borderline one. All 94 sections were measured this way; the tallest
+  never good enough to settle a borderline one. All 104 sections were measured this way; the tallest
   is 1072 against the 1081 pane. The ±3.5% cuts BOTH ways and it caught two in `security`: `key-vault`
   and `defender-for-cloud` both passed `npm run check` and measured 1087 and 1089 in the DOM. Measure
   before committing a course, not only when the guard complains. Trim anything the DOM puts above
@@ -111,7 +112,13 @@ frame. `serverless` was planned around that.
 - **A long hyphenated token does not break, and the model thinks it does.** `type-workload-
   environment-region-instance` held a paragraph at three lines through two rewrites that the guard
   scored as two. When a trim does not move the DOM number, the block has an unbreakable run in it —
-  cut a different block rather than shaving that one again.
+  cut a different block rather than shaving that one again. This recurs: it cost two wasted passes
+  in `governance` and one more in `project`. Re-measure after every trim, and if the number is
+  unchanged, move to another block immediately.
+- **The browser may refuse to give you a 16:9 viewport.** Resizing the window to 1600×1060 left the
+  viewport at 1600×757 (ratio 0.47), and every slide then LOOKS clipped in a screenshot. It is not a
+  real clip: `.slide-panel__scaler` reports its height in DESIGN px, which is independent of window
+  size, so measure and compare against 1081 rather than trusting what the screenshot shows.
 - **Keep a slide's `## ` title to one rendered line.** The guard used to push a single line's height
   for any heading, so a two-line title was undercounted by ~52px: `databases` §09 modelled 1096px,
   passed, and clipped its title AND its closing blockquote on screen. Headings now wrap at their own

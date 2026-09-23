@@ -1,0 +1,23 @@
+import type { Section } from '../types'
+
+export const networkDesign: Section = {
+  id: 'network-design',
+  title: 'The network',
+  scene: 'the-hub-and-one-spoke',
+  slide: `## One entrance, and a private path to everything else
+
+A hub in Connectivity, one spoke in orders-prod, peered. One spoke on purpose: the shape is about entrances and exits.
+
+### In
+**Front Door** with a WAF, in Prevention after two weeks in Detection. The only public endpoint in the design. Container Apps is internal and takes traffic over **Private Link** — nothing to find by scanning.
+
+### Sideways
+**Private endpoints** for SQL, Key Vault and storage, DNS zones in the hub. Public network access **disabled**, not merely unused.
+
+### Out
+All egress through **Azure Firewall**, allow-listed: the PSP, Azure's endpoints, the registry. Everything else denied **and logged** — which is how you find a dependency you did not know about.
+
+> Egress filtering turns a compromise into an attempt.`,
+  narration:
+    "The network diagram on the left has exactly one spoke, and that is deliberate. Hub and spoke is usually drawn with five or six spokes fanning out, which makes it look like a diagram about scale. It is not. It is a diagram about entrances and exits, and those do not get more interesting when you add spokes. So: one hub in the Connectivity subscription, one spoke in orders-prod, peered. Let me take the three directions traffic moves. In. There is exactly one public endpoint in this entire design, and it is Front Door, with a web application firewall policy on it. It runs in Prevention mode — after, and I will keep saying this, two weeks in Detection mode with somebody reading the logs and tuning out the rules that were blocking our own application. Behind it, the Container Apps environment is internal. It does not have a public endpoint. Front Door reaches it over Private Link, which means that if somebody scans our address space looking for the origin so they can bypass the WAF — and that is a real, routine attack — there is nothing there to find. Origin protection is the half of a WAF deployment people forget, and a WAF you can walk around is decoration. Sideways. Every data service has a private endpoint, sitting in a dedicated subnet in the spoke, with the private DNS zones living in the hub so that name resolution works consistently from anywhere in the network. SQL, Key Vault, the storage account behind the lake. And on all three, public network access is disabled — not left unused, disabled — because a firewall rule that allows nothing and a service that accepts no public traffic are different things, and only the second one survives somebody adding an exception in a hurry. Out, and this is the direction most designs never think about. All egress from the spoke routes through Azure Firewall in the hub, with an allow-list: the payment provider's API, Azure's own service endpoints, the container registry we pull images from. Everything else is denied, and — this is the important part — logged. Let me make the case for that, because egress filtering is genuinely the control people skip. It is fiddly to set up, it breaks things in ways that are annoying to debug, and it protects against nothing you can easily demonstrate. Here is what it actually does. If something in your application is compromised — a dependency with a supply chain problem, an injection you did not catch — the attacker's next step is essentially always to talk to something outside. Fetch a second-stage payload. Send data somewhere. With egress filtered, that step fails. The compromise is still real, and it is now an attempt rather than a breach, and there is a log line saying something in your spoke tried to reach an address you have never heard of. That log line is often the first sign anybody gets. There is one more thing in the hub and it is Bastion, which gives us browser-based access to anything we need to reach without a public IP on it. In this particular design almost nothing is a virtual machine, so it is close to unused — but it is in the hub because the day somebody needs to reach into the network, the alternative is opening something, and things opened in a hurry stay open. Finally, the addressing. The hub is a sixteen and the spoke is a sixteen, non-overlapping, and they are non-overlapping with the corporate ranges as well. That sounds trivially obvious and it is the single most common reason a peering cannot be created eighteen months later, at which point the fix is renumbering a production network. Write the address plan down before the first virtual network exists.",
+}

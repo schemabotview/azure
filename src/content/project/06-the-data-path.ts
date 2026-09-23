@@ -1,0 +1,23 @@
+import type { Section } from '../types'
+
+export const theDataPath: Section = {
+  id: 'the-data-path',
+  title: 'The data path',
+  scene: 'order-to-answered-question',
+  slide: `## One copy a night, and two questions off it
+
+Finance needs a daily reconciliation; customer service needs to look up an old order. Neither is a streaming problem.
+
+### The path
+One **Data Factory** copy activity at 02:00, reading the **geo-replica** — so analytics never touches the database serving customers. It lands in **bronze** as it arrived; silver types and deduplicates; gold is shaped for the two questions.
+
+### Why no streaming
+Nothing in the brief asks a question a nightly number cannot answer. Event Hubs and a Stream Analytics job would be more interesting and would add a second thing that can be broken at 3am.
+
+### The bit that is easy to get wrong
+Partition by \`order_date\` in the path, as \`key=value\`. Bronze is **append-only** — if silver is wrong you rebuild it, and if bronze is wrong the evidence is gone.
+
+> The discipline in a capstone is not building the version you would enjoy.`,
+  narration:
+    "The data path, and this section is mostly an argument for restraint, so let me put the conclusion first: this is the boring version, deliberately, and the discipline of not building the interesting one is most of what a capstone is for. What does the business actually ask for? Two things. Finance needs a daily reconciliation — orders taken, payments captured, discrepancies flagged — and they need it for yesterday, every morning. Customer service needs to look up an order from three months ago when a customer calls. That is it. That is the entire analytics requirement, and neither of those is a streaming problem. So here is the path. One Data Factory pipeline with essentially one copy activity, running at two in the morning. And it reads from the geo-replica, not the primary. That is a small decision with a real effect: the replica exists anyway, we are paying for it for disaster recovery, and reading analytics off it means a heavy extract never contends with the database that is serving customers. Using an asset you already own for a second purpose is free capability, and it is the kind of thing you only notice if you look at the whole design at once. It lands in bronze, exactly as it arrived from the source — no cleaning, no reshaping, nothing dropped. Silver types it, deduplicates it, and resolves the handful of things that are genuinely ambiguous in the raw extract. Gold is shaped for the two questions: a reconciliation table for finance, and an order-history table indexed the way customer service actually searches, which is by customer, not by order. Power BI reads gold for the dashboard. A SQL endpoint over gold serves the lookups. Now let me justify what is absent, because somebody will ask. There is no Event Hubs, no Stream Analytics, no real-time anything. Those would be more interesting to build and more interesting to talk about. They would also be a second pipeline that can break at three in the morning, with a windowing model to reason about, and they would answer no question that anybody has asked. If the business comes back and says they need to see promotion-day order rates live on a wall, then we build it, and we will have a reason to point at. Building it now is guessing, and the cost of the guess is not the build — it is that two engineers now operate two data paths forever. Two details that are easy to get wrong and expensive to fix. Partition the lake by order date, in the path, as key equals value. Every engine that reads it then prunes without being told, and because the reconciliation query is always a date range, that is the difference between reading one day and reading the whole history. And bronze is append-only. Nothing edits it, nothing corrects it, nothing deletes from it. The reason is simple: if silver turns out to be wrong — a typing bug, a deduplication rule that was too aggressive — you rebuild it from bronze and lose an hour. If bronze is wrong, or was edited, the evidence is gone and you are asking the source system for six months of history, which it may not be able to give you. Bronze is the thing that makes every other mistake recoverable, and the discipline is that it is boring and untouched. One last observation on scope, and it is the same one the data course made. Spark, dimensional modelling, and how you actually build a good gold layer are large subjects with their own courses. What this section is showing you is the shape and the placement — where the copy runs, what it reads, what is append-only — because those are the decisions that are hard to change later, and the modelling inside gold is the part you can iterate on every week.",
+}
