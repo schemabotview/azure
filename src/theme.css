@@ -1,0 +1,12 @@
+/* Azure's design surface — the three tokens @graphlearning/shell leaves to the repo.
+   Imported AFTER the shell's stylesheet in main.tsx, so these win the cascade.
+   --brand is Azure blue, lifted from the vendor's #0078d4 to #3aa0ff: the true brand hue reads at
+   about 3.4:1 against the shell's #1a1d23 surface, which is thin for link text. Blue is the most
+   crowded lane in the catalog (snowflake #29b5e8, data-warehousing #5b8cff, python #4b8bbe), and
+   this is the one place brand fidelity outranks separation — nobody mistakes an Azure site.
+   --brand is COOL, so the slide's `###` counter tone is warm. */
+:root {
+  --brand: #3aa0ff; /* Azure blue — eyebrow, links, the catalog card tint */
+  --brand-hover: #6cb8ff; /* lighter blue — the eyebrow's hover state */
+  --accent-2: #ffcf70; /* warm counter tone to --brand: the slide's `###` subheading */
+}

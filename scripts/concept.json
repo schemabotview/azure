@@ -1,0 +1,8 @@
+{
+  "_comment": "Per-repo publishing identity, read by @graphlearning/shell's thumb / gen-descriptions scripts. Env vars (CONCEPT, SITE, APP_PATH, HASHTAGS, PANEL_BG) still override.",
+  "concept": "Azure",
+  "site": "https://graphl.in",
+  "appPath": "/azure",
+  "hashtags": "#Azure #MicrosoftAzure #CloudComputing #AZ104 #CloudArchitecture #EntraID #DevOps #TechEducation",
+  "panelBg": "radial-gradient(118% 104% at 70% 34%, #3aa0ff 0%, #12467f 44%, #060f1f 100%)"
+}

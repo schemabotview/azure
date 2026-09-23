@@ -1,0 +1,13 @@
+node_modules
+dist
+dist-snapshot
+out
+.tmp
+segments
+images
+*.local
+.claude
+.DS_Store
+
+# the engine tarball used for local work before 0.6.0 was published
+*.tgz
