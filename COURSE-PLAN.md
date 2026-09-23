@@ -164,7 +164,7 @@ Recorded so they can be argued with, not rediscovered.
 | Call | Why | Cost of reversing |
 |---|---|---|
 | The **scope tree** is taught in `foundations` (§03–§06), not in a governance course at the end | RBAC, Policy, cost and locks all attach to a level of it, so every later course needs it on day one. It is also the single biggest difference from AWS. | High — four sections and the spine of the first course. |
-| **Azure icons shipped in the engine** (`@graphlearning/flow` 0.6.0, 134 keys) before authoring began | A vendor concept's scenes lean on service tiles; retrofitting ~100 scenes would mean re-reviewing every frame. | Zero now; it was the expensive option only if deferred. |
+| **Azure icons shipped in the engine** (`@graphlearning/flow` 0.7.0, 134 keys) before authoring began | A vendor concept's scenes lean on service tiles; retrofitting ~100 scenes would mean re-reviewing every frame. | Zero now; it was the expensive option only if deferred. |
 | `identity` is course 2, before anything is deployed | Every later course hands something a permission. Teaching it first makes that a decision rather than a default. | Low until its wavs exist. |
 | `data` (08) is one course, not a data-engineering arc | The workspace already carries `databricks-data-engineer`, `apache-spark`, `dbt` and `data-warehousing`. This course names Azure's data surface and points at those. | Zero — it is additive to split later. |
 | `project` (11) is the trimmable tail | Nothing before it points forward, so the capstone can be cut, deferred or appended late without touching 1–10. | Zero. |

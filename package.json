@@ -20,7 +20,7 @@
     "thumb": "graphl-thumb"
   },
   "dependencies": {
-    "@graphlearning/flow": "^0.6.0",
+    "@graphlearning/flow": "^0.7.0",
     "@graphlearning/shell": "^0.3.0",
     "@xyflow/react": "12.11.3",
     "lucide-react": "^1.28.0",

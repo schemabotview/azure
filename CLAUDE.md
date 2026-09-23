@@ -7,7 +7,8 @@ The full 104-section plot is [`COURSE-PLAN.md`](./COURSE-PLAN.md).
 ## What this is
 
 A standalone concept app: its own scenes + courses. The render engine is **`@graphlearning/flow`**
-and the app shell is **`@graphlearning/shell`**, both pinned by version.
+(`^0.7.0` — the release that carries the Azure icon set) and the app shell is
+**`@graphlearning/shell`**, both pinned by version.
 
 The repo name collides with its own source material, and that is worth knowing before you go
 looking: **`schemabotview/azure` previously held the content quarry** — a 14-notebook AZ-104
@@ -37,7 +38,7 @@ letting the comparison leak into every later course.
 
 ## Scenes — what this concept has that others do not
 
-`@graphlearning/flow@0.6.0` ships **134 Azure service tiles**; a node names one with `icon: 'vm'`.
+`@graphlearning/flow@0.7.0` ships **134 Azure service tiles**; a node names one with `icon: 'vm'`.
 Three things to know before authoring one:
 
 - **The key is the short spoken service name** (`vm`, `aks`, `keyvault`, `adls`), not the package's
