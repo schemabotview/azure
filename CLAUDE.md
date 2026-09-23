@@ -25,9 +25,10 @@ All eleven are declared in `src/content/index.ts` from day one so the arc shows 
 immediately; each fills as its slice is authored. **Courses 1–5 are the shippable prefix.** Played in
 syllabus order; `→` past a course's last section rolls into the next.
 
-**Authored so far — the whole shippable prefix:** `foundations` (10) · `identity` (10) ·
-`compute` (9) · `storage` (9) · `networking` (10) = **48 sections**. Courses 6-11 are declared with
-`sections: []`. No audio yet, so every authored course's section order is still free to change.
+**Authored so far:** `foundations` (10) · `identity` (10) · `compute` (9) · `storage` (9) ·
+`networking` (10) — the whole shippable prefix — plus `databases` (9) = **57 sections**. Courses
+7-11 are declared with `sections: []`. No audio yet, so every authored course's section order is
+still free to change.
 
 ## The one idea the arc is built on
 
@@ -62,6 +63,7 @@ Renderer mix per course, and no two adjacent sections share one. Check the plan 
 | `compute` | nest · script · table · board · flow · nest · board · script · table |
 | `storage` | nest · table · flow · board · table · script · flow · nest · script |
 | `networking` | nest · table · script · board · flow · table · flow · board · table · nest |
+| `databases` | board · table · script · table · nest · script · table · flow · script |
 
 ## Authoring rules — learned on these frames
 
@@ -82,6 +84,10 @@ Renderer mix per course, and no two adjacent sections share one. Check the plan 
   identical to the pile it was contrasted against. Where the COLOUR is the argument, use lucide.
 - **`flow: 'LR'` caps at three cards** — `storage`'s four-tier path came out at a third of legible
   size before it was switched to TB.
+- **Keep a slide's `## ` title to one rendered line.** `check-content.mjs` used to push a single
+  line's height for any heading, so a two-line title was undercounted by ~52px: `databases` §09
+  modelled 1096px, passed, and clipped its title AND its closing blockquote on screen. The guard now
+  wraps headings at their own glyph width — but a title that needs two lines is a title to shorten.
 - **Keep a leaf card's `label` to ~3 words and its `sub` to one line.** A leaf is a fixed 210×96; it
   does not grow. `npm run check` models this, but it models the *height*, not whether the wrap reads
   well.

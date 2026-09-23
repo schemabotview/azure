@@ -51,9 +51,19 @@ const BODY_LH = FS * 1.45
 const H2_H = FS * 1.73 * 1.15
 const H3_H = FS * 1.2 * 1.2
 const CPX = 12.4 // px per character at 26px IBM Plex Sans (measured off a rendered slide)
+// A heading is set larger, so it wraps sooner in the same column. Scaled from CPX by the heading's
+// own font-size ratio, and both are weight-600, which is why the ratio alone is close enough.
+const H2_CPX = CPX * 1.73
+const H3_CPX = CPX * 1.2
 
-/** Wrapped line count for one markdown block at the given column width. */
-function textLines(text, widthPx) {
+/** Wrapped line count for one markdown block at the given column width.
+ *
+ * `cpx` is the per-character width of the FACE THIS BLOCK IS SET IN. It defaults to the body's,
+ * but a heading is larger, and a HEADING THAT WRAPS was the one thing this model could not see: the
+ * h2/h3 branches below used to push a single line's height unconditionally, so a two-line title was
+ * undercounted by a whole line (~52px at h2). `databases` §09 modelled 1096px, passed, and clipped
+ * its title at the top and its blockquote at the bottom on screen. */
+function textLines(text, widthPx, cpx = CPX) {
   // **bold** is ~10% wider at weight 700 — pad it so a bold-heavy line wraps when it really does.
   const padded = text.replace(/\*\*(.+?)\*\*/g, (_, b) => b + 'x'.repeat(Math.ceil(b.length * 0.1)))
   // `inline code` renders as a monospace CHIP: horizontal padding either side, and a wider glyph
@@ -63,7 +73,7 @@ function textLines(text, widthPx) {
   // DID render correctly — three flagged several that were verified fine on screen.
   const chipped = padded.replace(/`([^`]+)`/g, (_, c) => c + 'xx')
   const clean = chipped.replace(/[*`_]/g, '')
-  const cpl = Math.floor(widthPx / CPX)
+  const cpl = Math.floor(widthPx / cpx)
   let n = 1
   let cur = 0
   for (const w of clean.split(/\s+/)) {
@@ -91,10 +101,10 @@ function slideHeight(md) {
     if (!l) continue
     if (l.startsWith('## ')) {
       closeUl()
-      blocks.push({ mt: 0, h: H2_H, mb: 20 })
+      blocks.push({ mt: 0, h: textLines(l.slice(3), TEXT_W, H2_CPX) * H2_H, mb: 20 })
     } else if (l.startsWith('### ')) {
       closeUl()
-      blocks.push({ mt: 30, h: H3_H, mb: 12 })
+      blocks.push({ mt: 30, h: textLines(l.slice(4), TEXT_W, H3_CPX) * H3_H, mb: 12 })
     } else if (/^([-*]|\d+\.)\s/.test(l)) {
       ul ??= { lines: 0, items: 0 }
       ul.items++
