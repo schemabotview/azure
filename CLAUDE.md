@@ -26,9 +26,9 @@ immediately; each fills as its slice is authored. **Courses 1–5 are the shippa
 syllabus order; `→` past a course's last section rolls into the next.
 
 **Authored so far:** `foundations` (10) · `identity` (10) · `compute` (9) · `storage` (9) ·
-`networking` (10) — the whole shippable prefix — plus `databases` (9) and `serverless` (9) =
-**66 sections**. Courses 8-11 are declared with `sections: []`. No audio yet, so every authored
-course's section order is still free to change.
+`networking` (10) — the whole shippable prefix — plus `databases` (9), `serverless` (9), `data` (9)
+and `security` (9) = **84 sections**. `governance` and `project` are declared with `sections: []`.
+No audio yet, so every authored course's section order is still free to change.
 
 ## The one idea the arc is built on
 
@@ -65,6 +65,8 @@ Renderer mix per course, and no two adjacent sections share one. Check the plan 
 | `networking` | nest · table · script · board · flow · table · flow · board · table · nest |
 | `databases` | board · table · script · table · nest · script · table · flow · script |
 | `serverless` | script · table · script · flow · board · nest · compare · script · flow |
+| `data` | board · script · nest · compare · nest · table · board · script · flow |
+| `security` | nest · table · flow · nest · board · flow · script · table · board |
 
 `compare` and `table` are BOTH table nodes — the difference is only whether you read down the rows
 or across them. So they count as the same renderer for adjacency: two in a row read as one repeated
@@ -100,12 +102,19 @@ frame. `serverless` was planned around that.
   `document.querySelector('.slide-panel__scaler').scrollHeight` is its true design height, and
   `panel.scrollHeight > panel.clientHeight` is whether it actually clips. `check-content.mjs` models
   the same number from characters and lands within ±3.5% — good enough to catch the gross case,
-  never good enough to settle a borderline one. All 66 sections were measured this way; the tallest
-  is 1072 against the 1081 pane.
+  never good enough to settle a borderline one. All 84 sections were measured this way; the tallest
+  is 1072 against the 1081 pane. The ±3.5% cuts BOTH ways and it caught two in `security`: `key-vault`
+  and `defender-for-cloud` both passed `npm run check` and measured 1087 and 1089 in the DOM. Measure
+  before committing a course, not only when the guard complains.
 - **Keep a slide's `## ` title to one rendered line.** The guard used to push a single line's height
   for any heading, so a two-line title was undercounted by ~52px: `databases` §09 modelled 1096px,
   passed, and clipped its title AND its closing blockquote on screen. Headings now wrap at their own
   measured glyph width — but a title that needs two lines is a title to shorten.
+- **A pile of two cards should STACK, not sit side by side.** A board's `cols: 2` is the board's;
+  giving each PILE `cols: 2` as well made `security` §05 a 1040×330 letterbox that rendered at half
+  size — the same defect as three piles in a row. Leave the pile's `cols` unset so its cards stack,
+  and the board comes out square. Nor should one board mix `variant: 'tile'` with cards: a tile is
+  narrower, so the piles came out visibly uneven and the group headers wrapped.
 - **Keep a leaf card's `label` to ~3 words and its `sub` to one line.** A leaf is a fixed 210×96; it
   does not grow. `npm run check` models this, but it models the *height*, not whether the wrap reads
   well.
