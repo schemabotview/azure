@@ -4,7 +4,7 @@ The full section plot for the eleven-course spine. `CLAUDE.md` is the operationa
 the detail.
 
 **104 sections across 10 courses + a capstone.** Courses 1–5 (48 sections) are the shippable prefix.
-**Authored so far: `foundations` (10/10).** The rest are declared with `sections: []`.
+**Authored: `foundations` · `identity` · `compute` · `storage` · `networking` — 48 sections, the whole shippable prefix. Courses 6-11 are declared with `sections: []`.**
 
 Three decisions taken before a line is authored:
 

@@ -25,7 +25,9 @@ All eleven are declared in `src/content/index.ts` from day one so the arc shows 
 immediately; each fills as its slice is authored. **Courses 1–5 are the shippable prefix.** Played in
 syllabus order; `→` past a course's last section rolls into the next.
 
-**Authored so far: `foundations` (10/10).** The rest are declared with `sections: []`.
+**Authored so far — the whole shippable prefix:** `foundations` (10) · `identity` (10) ·
+`compute` (9) · `storage` (9) · `networking` (10) = **48 sections**. Courses 6-11 are declared with
+`sections: []`. No audio yet, so every authored course's section order is still free to change.
 
 ## The one idea the arc is built on
 
@@ -50,8 +52,16 @@ Three things to know before authoring one:
   §02 uses the lucide `building` glyph for its zones because six copies of the Availability Sets
   tile said nothing. Reach for a lucide glyph whenever the node is a concept rather than a product.
 
-Renderer mix in `foundations`, and no two adjacent sections share one:
-`board · nest · nest+board · script · table · board · table · flow · table · board`.
+Renderer mix per course, and no two adjacent sections share one. Check the plan BEFORE authoring —
+`networking` was drafted with two flows back to back and had to be recut:
+
+| course | order |
+|---|---|
+| `foundations` | board · nest · nest · script · table · board · table · flow · table · board |
+| `identity` | compare · nest · board · script · flow · nest · compare · script · flow · board |
+| `compute` | nest · script · table · board · flow · nest · board · script · table |
+| `storage` | nest · table · flow · board · table · script · flow · nest · script |
+| `networking` | nest · table · script · board · flow · table · flow · board · table · nest |
 
 ## Authoring rules — learned on these frames
 
@@ -65,6 +75,13 @@ Renderer mix in `foundations`, and no two adjacent sections share one:
 - **An edge label rides the midpoint of its path.** §08's `levers → rate` label sat straight on top
   of the Meter card — the exact defect the workspace file warns about. If a label cannot be short,
   drop it and let the arrow carry the relation.
+- **A flow must not be a cycle.** The layout is longest-path and cannot rank one: `compute`'s
+  autoscale scene closed its loop and the chain ran off the top and bottom of the frame, dropping an
+  edge label onto a card on the way. Narrate the loop; draw the line.
+- **A full-colour service tile ignores the pattern accent.** `identity`'s warn-red pile rendered
+  identical to the pile it was contrasted against. Where the COLOUR is the argument, use lucide.
+- **`flow: 'LR'` caps at three cards** — `storage`'s four-tier path came out at a third of legible
+  size before it was switched to TB.
 - **Keep a leaf card's `label` to ~3 words and its `sub` to one line.** A leaf is a fixed 210×96; it
   does not grow. `npm run check` models this, but it models the *height*, not whether the wrap reads
   well.
